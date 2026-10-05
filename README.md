@@ -1,0 +1,56 @@
+# LayoutPreview Native Prototype v0.5 — VS Code
+
+Первый настоящий Windows vertical slice для проверки идеи поверх обычного Блокнота. Это уже не HTML-макет.
+
+## Что проверяем
+
+- глобально видим физические нажатия EN/RU;
+- показываем WPF overlay рядом с настоящим caret;
+- overlay не должен забирать focus у Блокнота;
+- `Ghb` -> `При`, `Ghbdtn` -> `Привет`;
+- Right Arrow при видимом preview принимает вариант;
+- клик по preview тоже принимает вариант;
+- Accept удаляет отслеживаемое ошибочное слово, вставляет Unicode-вариант и просит foreground window переключиться на принятую раскладку;
+- после Accept следующие физические клавиши должны уже печататься в новой Windows-раскладке;
+- Ctrl/Alt/Win shortcuts не перехватываются.
+
+## Что поставить
+
+1. VS Code.
+2. .NET 10 SDK x64.
+   Проект таргетит `net10.0-windows` (LTS).
+3. В VS Code расширение **C# Dev Kit** (`ms-dotnettools.csdevkit`). VS Code сам предложит его из `.vscode/extensions.json`.
+
+## Запуск
+
+1. Распакуй папку проекта.
+2. В VS Code: **File -> Open Folder...** и выбери `LayoutPreviewNative-v0.5`.
+3. Дождись, пока C# Dev Kit загрузит проект.
+4. Нажми **F5**.
+5. Если VS Code спросит конфигурацию, выбери **LayoutPreview — Debug**.
+6. Открой обычный Windows Notepad и выполняй `TEST-CHECKLIST.md`.
+7. Остановить prototype: **Shift+F5**.
+
+В Debug Console VS Code появляются строки `[LayoutPreview] Started`, `Preview: ...`, `Accept: ...` — они пригодятся, если overlay не появляется или Accept ломается.
+
+## Архитектура v0.5
+
+- `LayoutPreviewController.cs` — keyboard hook, session tracking, conversion, Accept.
+- `PreviewWindow.xaml/.cs` — focus-safe WPF overlay.
+- `Native.cs` — Win32 interop.
+- `.vscode/launch.json` — F5 debug.
+- `.vscode/tasks.json` — build перед запуском.
+
+## Важно
+
+Это специально маленький proof of concept. Пока не пытаемся поддержать все приложения. Сначала добиваем цепочку **Notepad -> caret -> preview -> Accept -> Replace -> Switch Layout**. После этого добавляем persistent session/segments, UI Automation/TSF caret/text context, Chromium/Electron и protected contexts.
+
+Исходники подготовлены вне Windows. Здесь можно проверить структуру проекта и конфиги, но WPF/Win32 runtime должен быть фактически скомпилирован и прогнан на твоём Windows 11 через F5. Первый Windows compile/runtime feedback будет частью следующей итерации.
+
+## Что изменено в v0.5
+
+- Координаты caret больше не передаются в WPF `Left/Top` как будто это DIPs: overlay позиционируется через `SetWindowPos` в тех же физических пикселях, что и Win32 caret. Это исправляет сильный уезд preview при Windows scaling.
+- Preview выравнивается по вертикальному центру реального `rcCaret`, а не через магическое `y - 7`.
+- Accept больше не анимирует `Window.Left`. Окно остаётся неподвижным, а preview двигается внутри него через `TranslateTransform` — это заметно снижает рывки layered WPF window.
+- Fade теперь идёт от реальной opacity 1.0 к 0 и заканчивается к 50% движения; раньше прозрачность дублировалась альфой цветов + opacity контейнера и растворение было почти незаметно.
+- Для WPF-анимаций явно запрошено 60 FPS.
