@@ -39,7 +39,7 @@ public partial class PreviewWindow : Window
         };
     }
 
-    public void ShowPreview(string text, Native.RECT caretPx, uint targetDpi, bool animateFirstAppearance)
+    internal void ShowPreview(string text, Native.RECT caretPx, uint targetDpi, bool animateFirstAppearance)
     {
         if (_acceptAnimationRunning)
             return;
@@ -158,6 +158,17 @@ public partial class PreviewWindow : Window
     }
 
     public static int AcceptMidpointDelayMs => AcceptDurationMs / 2;
+
+    private static void Animate(FrameworkElement target, DependencyProperty property, double from, double to, int durationMs, IEasingFunction ease)
+    {
+        var animation = new DoubleAnimation(from, to, TimeSpan.FromMilliseconds(durationMs))
+        {
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.HoldEnd
+        };
+        Timeline.SetDesiredFrameRate(animation, 60);
+        target.BeginAnimation(property, animation);
+    }
 
     private static void Animate(Animatable target, DependencyProperty property, double from, double to, int durationMs, IEasingFunction ease)
     {

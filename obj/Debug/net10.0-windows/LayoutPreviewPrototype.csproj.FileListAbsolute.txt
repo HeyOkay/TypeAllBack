@@ -1,9 +1,0 @@
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\PreviewWindow.baml
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\PreviewWindow.g.cs
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\App.g.cs
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype_MarkupCompile.cache
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype.g.resources
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype.AssemblyInfoInputs.cache
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype.AssemblyInfo.cs
-C:\Users\ameyn\Desktop\LayoutPreview\obj\Debug\net10.0-windows\LayoutPreviewPrototype.csproj.CoreCompileInputs.cache
