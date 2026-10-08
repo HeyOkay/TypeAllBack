@@ -17,6 +17,7 @@ public sealed class LayoutPreviewController : IDisposable
     private IntPtr _hook;
     private string _previewText = string.Empty;
     private IntPtr _alternativeLayout;
+    private bool _targetRussian;
     private bool _visible;
     private bool _accepting;
 
@@ -127,7 +128,8 @@ public sealed class LayoutPreviewController : IDisposable
             return;
         }
 
-        var converted = ConvertVirtualKeys(_wordKeys, _alternativeLayout);
+        _targetRussian = IsRussianLayout(_alternativeLayout);
+        var converted = ConvertVirtualKeys(_wordKeys, _targetRussian);
         if (string.IsNullOrWhiteSpace(converted))
         {
             Reset();
@@ -159,24 +161,11 @@ public sealed class LayoutPreviewController : IDisposable
         return list.FirstOrDefault(hkl => hkl != current);
     }
 
-    private static string ConvertVirtualKeys(IEnumerable<uint> keys, IntPtr layout)
-    {
-        var result = new StringBuilder();
-        var keyState = new byte[256];
-        Native.GetKeyboardState(keyState);
+    private static string ConvertVirtualKeys(IEnumerable<uint> keys, bool toRussian) =>
+        KeyboardConversion.Convert(keys.ToArray(), toRussian);
 
-        // Conversion is based on VK positions under the alternative HKL.
-        // Caps/Shift are intentionally inherited from the live keyboard state in this prototype.
-        foreach (var vk in keys)
-        {
-            uint scan = Native.MapVirtualKeyEx(vk, 0, layout);
-            var buffer = new StringBuilder(8);
-            int rc = Native.ToUnicodeEx(vk, scan, keyState, buffer, buffer.Capacity, 0, layout);
-            if (rc > 0)
-                result.Append(buffer.ToString(0, rc));
-        }
-        return result.ToString();
-    }
+    private static bool IsRussianLayout(IntPtr hkl) =>
+        unchecked((ushort)hkl.ToInt64()) == 0x0419;
 
     private static bool TryGetCaretScreenRect(uint thread, out Native.RECT screenRect)
     {
@@ -267,6 +256,7 @@ public sealed class LayoutPreviewController : IDisposable
         _wordKeys.Clear();
         _previewText = string.Empty;
         _alternativeLayout = IntPtr.Zero;
+        _targetRussian = false;
         _visible = false;
         Application.Current.Dispatcher.BeginInvoke(_preview.HidePreview, DispatcherPriority.Background);
     }
