@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../KeyboardConversion.cs" Link="KeyboardConversion.cs" />
+    <Compile Include="../InputSession.cs" Link="InputSession.cs" />
+    <Compile Include="../Native.cs" Link="Native.cs" />
+    <Compile Include="../NotepadEditor.cs" Link="NotepadEditor.cs" />
+  </ItemGroup>
+</Project>

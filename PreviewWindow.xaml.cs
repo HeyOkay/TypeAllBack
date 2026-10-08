@@ -20,7 +20,7 @@ public partial class PreviewWindow : Window
     // inside one stationary native window, avoiding Window.Left animation/jank.
     private const double LeftReserveDip = 170;
     private const double VerticalReserveDip = 4;
-    private const double RestingOpacity = 1.0;
+    private const double RestingOpacity = 0.85;
     private const int EnterDurationMs = 150;
     private const int ResizeDurationMs = 120;
     private const int AcceptDurationMs = 180;
@@ -44,6 +44,9 @@ public partial class PreviewWindow : Window
         if (_acceptAnimationRunning)
             return;
 
+        PreviewBorder.BeginAnimation(WidthProperty, null);
+        PreviewBorder.Width = double.NaN;
+        PreviewText.FontSize = Math.Clamp((caretPx.Bottom - caretPx.Top) * 96.0 / targetDpi * 0.78, 10, 40);
         PreviewText.Text = text;
         PreviewBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         double targetWidth = Math.Ceiling(PreviewBorder.DesiredSize.Width);
@@ -76,7 +79,8 @@ public partial class PreviewWindow : Window
         Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, windowLeftPx, windowTopPx, 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
 
-        if (animateFirstAppearance)
+        if (!SystemParameters.ClientAreaAnimation) { StopVisualAnimations(); PreviewBorder.Opacity = RestingOpacity; PreviewScale.ScaleX = PreviewScale.ScaleY = 1; PreviewTranslate.X = 0; }
+        else if (animateFirstAppearance)
         {
             StopVisualAnimations();
             PreviewBorder.Opacity = 0;
@@ -95,7 +99,7 @@ public partial class PreviewWindow : Window
             PreviewScale.ScaleX = PreviewScale.ScaleY = 1;
             PreviewTranslate.X = 0;
 
-            if (Math.Abs(targetWidth - oldWidth) > 0.5)
+            if (SystemParameters.ClientAreaAnimation && Math.Abs(targetWidth - oldWidth) > 0.5)
             {
                 var widthAnim = new DoubleAnimation(oldWidth, targetWidth, TimeSpan.FromMilliseconds(ResizeDurationMs))
                 {
@@ -110,7 +114,7 @@ public partial class PreviewWindow : Window
 
     public async Task PlayAcceptAnimationAsync()
     {
-        if (!IsVisible || _acceptAnimationRunning)
+        if (!SystemParameters.ClientAreaAnimation || !IsVisible || _acceptAnimationRunning)
             return;
 
         _acceptAnimationRunning = true;
@@ -157,7 +161,7 @@ public partial class PreviewWindow : Window
         _acceptAnimationRunning = false;
     }
 
-    public static int AcceptMidpointDelayMs => AcceptDurationMs / 2;
+    public static int AcceptMidpointDelayMs => SystemParameters.ClientAreaAnimation ? AcceptDurationMs / 2 : 0;
 
     private static void Animate(FrameworkElement target, DependencyProperty property, double from, double to, int durationMs, IEasingFunction ease)
     {

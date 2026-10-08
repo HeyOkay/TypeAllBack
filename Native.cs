@@ -76,7 +76,7 @@ internal static class Native
         public InputUnion U;
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 32)]
     public struct InputUnion
     {
         [FieldOffset(0)] public KEYBDINPUT ki;
@@ -168,4 +168,11 @@ internal static class Native
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
     public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-}
+    [DllImport("user32.dll")] public static extern short GetKeyState(int key);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder value, int capacity);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out UIntPtr result);
+    [DllImport("imm32.dll")] public static extern IntPtr ImmGetContext(IntPtr hwnd);
+    [DllImport("imm32.dll")] public static extern bool ImmReleaseContext(IntPtr hwnd, IntPtr context);
+    [DllImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW")] public static extern int ImmGetCompositionString(IntPtr context, uint index, IntPtr buffer, uint length);}
