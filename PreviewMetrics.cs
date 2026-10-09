@@ -1,4 +1,4 @@
-namespace LayoutPreviewPrototype;
+﻿namespace LayoutPreviewPrototype;
 
 internal static class PreviewMetrics
 {
@@ -40,6 +40,14 @@ internal static class PreviewMetrics
         if (!firstAppearance && validPrevious)
             return Math.Clamp(previousSizeDip, 8, 96);
         return Math.Clamp(lineLimit, 8, 40);
+    }
+
+    // Wait only before the first visible preview; typing and session tracking continue.
+    public static bool ShouldWaitForFont(string source, bool hasAppeared, long now, ref long waitStarted)
+    {
+        if (hasAppeared || !source.Contains("; range=pending", StringComparison.Ordinal)) return false;
+        if (waitStarted < 0) waitStarted = now;
+        return now - waitStarted < 1100;
     }
 
     public static double OverlayScaleRatio(uint sourceDpi, double overlayScale) =>

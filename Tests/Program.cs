@@ -589,6 +589,15 @@ Eq(UiaRangeFont.Estimate("hello",new System.Windows.Rect(0,0,40,double.NaN),"lo"
     "nonfinite provider geometry is rejected");
 Eq(UiaRangeFont.Estimate("hello",System.Windows.Rect.Empty,"lo",new System.Windows.Rect(28,0,12,20),96,"Segoe UI",400,false),0.0,
     "empty provider geometry is rejected");
+long fontWait=-1;
+Eq(PreviewMetrics.ShouldWaitForFont("UIA character; range=pending",false,100,ref fontWait),true,"first preview waits for pending font");
+Eq(PreviewMetrics.ShouldWaitForFont("UIA character; range=pending",false,1199,ref fontWait),true,"font wait has a bounded settling interval");
+Eq(PreviewMetrics.ShouldWaitForFont("UIA character; range=pending",false,1200,ref fontWait),false,"unavailable estimates cannot hide preview forever");
+Eq(PreviewMetrics.ShouldWaitForFont("UIA range-width estimate",false,200,ref fontWait),false,"confirmed size can appear before deadline");
+Eq(PreviewMetrics.ShouldWaitForFont("UIA character; range=pending",true,200,ref fontWait),false,"shown preview is never hidden for formatting");
+fontWait=-1;
+Eq(PreviewMetrics.ShouldWaitForFont("Win32 HFONT",false,200,ref fontWait),false,"native font has no presentation delay");
+Eq(fontWait,-1L,"reliable formatting does not start a wait");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);

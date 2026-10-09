@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
@@ -82,6 +82,7 @@ public partial class PreviewWindow : Window
         if (_acceptAnimationRunning)
             return;
         using var measurement = PerformanceDiagnostics.Measure("preview-render");
+        bool textChanged = _lastRender?.Text != text;
         _lastRender = new(text, caretPx, targetDpi, fontSizeDip, fontFamilyName, fontWeight, fontItalic, fontSource);
         new WindowInteropHelper(this).EnsureHandle();
         double overlayScale = VisualTreeHelper.GetDpi(this).DpiScaleY;
@@ -178,7 +179,7 @@ public partial class PreviewWindow : Window
             PreviewScale.ScaleX = PreviewScale.ScaleY = 1;
             PreviewTranslate.X = 0;
 
-            if (SystemParameters.ClientAreaAnimation && Math.Abs(targetWidth - oldWidth) > 0.5)
+            if (textChanged && SystemParameters.ClientAreaAnimation && Math.Abs(targetWidth - oldWidth) > 0.5)
             {
                 var widthAnim = new DoubleAnimation(oldWidth, targetWidth, TimeSpan.FromMilliseconds(ResizeDurationMs))
                 {

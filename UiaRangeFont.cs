@@ -47,7 +47,7 @@ internal sealed class UiaRangeFont
         if (_stable > 0) return Apply(snapshot);
         long now = Environment.TickCount64;
         if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < 3)
-            return snapshot;
+            return _attempts < 6 ? Pending(snapshot) : snapshot;
         _lastAttempt = now;
         long started = Stopwatch.GetTimestamp();
         try
@@ -69,7 +69,7 @@ internal sealed class UiaRangeFont
             _candidate = size;
             if (_matches >= 2) _stable = size;
             SetStatus($"rangeDip={size:F2}; подтверждений={_matches}/2; family={(snapshot.FontFamilyName.Length == 0 ? "Segoe UI fallback" : snapshot.FontFamilyName)}");
-            return _stable > 0 ? Apply(snapshot) : snapshot;
+            return _stable > 0 ? Apply(snapshot) : Pending(snapshot);
         }
         catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException or ElementNotAvailableException)
         { SetStatus("Диапазон недоступен: " + e.GetType().Name); return snapshot; }
@@ -82,6 +82,8 @@ internal sealed class UiaRangeFont
         }
     }
 
+    private static EditorSnapshot Pending(EditorSnapshot snapshot) => snapshot with
+    { FontSource = snapshot.FontSource + "; range=pending" };
     private void SetStatus(string value) => Status = value;
     private EditorSnapshot Apply(EditorSnapshot snapshot) => snapshot with
     {

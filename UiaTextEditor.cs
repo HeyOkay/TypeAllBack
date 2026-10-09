@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
@@ -149,7 +149,7 @@ internal sealed class UiaTextEditor : IDisposable
             try { candidate = read(); }
             catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or ElementNotAvailableException)
             { /* Unavailable formatting must not invalidate verified text or the last font. */ }
-            if (candidate.FontSizeDip > 0 || _formattingSnapshot == null)
+            if (candidate.FontSizeDip > 0 || _formattingSnapshot == null || _formattingSnapshot.FontSizeDip <= 0)
                 _formattingSnapshot = candidate with { Text = "" };
         }
         return _formattingSnapshot == null ? context : CopyFormatting(context, _formattingSnapshot);
