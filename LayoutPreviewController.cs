@@ -6,6 +6,7 @@ namespace LayoutPreviewPrototype;
 public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
+    private double _lastHookCaptureMs;
     private readonly SessionDiagnostics _diagnostics = new();
     private SessionInputLog? _inputLog;
     private SessionInputLog InputLog => _inputLog ??= new SessionInputLog(_diagnostics);
@@ -194,6 +195,7 @@ public sealed class LayoutPreviewController : IDisposable
         {
             if (_disposed) return;
             PerformanceDiagnostics.Observe("key-dispatch", Environment.TickCount64 - input.CapturedAt);
+            PerformanceDiagnostics.Observe("hook-capture", input.HookCaptureMs);
             ProcessKey(input);
             _processedSequence = input.Sequence;
         }, DispatcherPriority.Input), _testInput);
@@ -228,6 +230,7 @@ public sealed class LayoutPreviewController : IDisposable
     private IntPtr ProcessKeyCore(CapturedKeyboardInput input)
     {
         var data = input.Data;
+        _lastHookCaptureMs = input.HookCaptureMs;
         int message = input.Message;
         _capturedCapsLock = input.CapsLock;
         int vk = (int)data.vkCode;
@@ -510,6 +513,7 @@ public sealed class LayoutPreviewController : IDisposable
             if (Environment.TickCount64 >= _pendingUntil)
             {
                 Trace.WriteLine($"Pending input timed out length={current.Text.Length} selection={current.SelectionStart},{current.SelectionEnd}");
+                Diagnostic("Подтверждение не получено", $"pending={_pendingInputs.Count}; revision={current.Revision}; ageMs={Environment.TickCount64-current.CapturedAt}; actualLength={current.Text.Length}; actualSelection={current.SelectionStart},{current.SelectionEnd}; expectedEnd={_session.End}; lastHookCaptureMs={_lastHookCaptureMs:F2}");
                 Reset("Истекло ожидание подтверждения клавиш (350 мс)");
             }
             return;

@@ -1,11 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace LayoutPreviewPrototype;
 
 internal readonly record struct CapturedKeyboardInput(Native.KBDLLHOOKSTRUCT Data, int Message,
     bool Shift, bool CapsLock, bool Control, bool Alt, bool Win, EditorSnapshot? Snapshot,
-    long Sequence, long CapturedAt, bool AcceptedRight);
+    long Sequence, long CapturedAt, bool AcceptedRight, double HookCaptureMs = 0);
 internal sealed record KeyboardAcceptContext(EditorSnapshot Editor, long Sequence);
 
 // Never wait for WPF, read document text, call COM, or render on this thread.
@@ -50,6 +50,7 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
     private IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
     {
         if (code < 0) return Native.CallNextHookEx(_hook, code, wParam, lParam);
+        long captureStarted = Stopwatch.GetTimestamp();
         var data = Marshal.PtrToStructure<Native.KBDLLHOOKSTRUCT>(lParam);
         if ((data.flags & Native.LLKHF_INJECTED) != 0 && data.dwExtraInfo == Native.LayoutPreviewInput)
             return Native.CallNextHookEx(_hook, code, wParam, lParam);
@@ -58,7 +59,9 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
         bool relevantDown = down && data.vkCode is not (0x10 or 0xA0 or 0xA1 or 0x11 or 0xA2 or 0xA3 or 0x12 or 0xA4 or 0xA5 or 0x5B or 0x5C);
         bool shift = Native.IsKeyDown(Native.VK_SHIFT), control = Native.IsKeyDown(Native.VK_CONTROL);
         bool alt = Native.IsKeyDown(Native.VK_MENU), win = Native.IsKeyDown(Native.VK_LWIN) || Native.IsKeyDown(Native.VK_RWIN);
-        TextEditor.TryReadForHook(out var snapshot);
+        // Native deletion must not depend on cross-process GUI focus checks.
+        // The controller tracks Backspace against its own confirmed session.
+        var snapshot = SnapshotForKey(data.vkCode, ReadSnapshot);
         if (relevantDown) TextEditor.NotifyInput();
         long beforeSequence = LastSequence;
         bool accepted = relevantDown && data.vkCode == Native.VK_RIGHT && !shift && !control && !alt && !win &&
@@ -68,11 +71,16 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
         try
         {
             deliver(new(data, message, shift, (Native.GetKeyState(0x14) & 1) != 0, control, alt, win,
-                snapshot, sequence, Environment.TickCount64, accepted));
+                snapshot, sequence, Environment.TickCount64, accepted,
+                Stopwatch.GetElapsedTime(captureStarted).TotalMilliseconds));
         }
         catch (InvalidOperationException) { accepted = false; } // Dispatcher is shutting down: pass through.
         return accepted ? (IntPtr)1 : Native.CallNextHookEx(_hook, code, wParam, lParam);
     }
+    private static EditorSnapshot? ReadSnapshot() => TextEditor.TryReadForHook(out var snapshot) ? snapshot : null;
+    internal static EditorSnapshot? SnapshotForKey(uint key, Func<EditorSnapshot?> read) =>
+        key == Native.VK_BACK ? null : read();
+
     internal static bool CanAccept(KeyboardAcceptContext? context, EditorSnapshot? current, long sequence) =>
         context != null && current != null && context.Sequence == sequence &&
         TextEditor.SameEditor(context.Editor, current) && context.Editor.Layout == current.Layout &&

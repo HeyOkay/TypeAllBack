@@ -648,6 +648,12 @@ Eq(LanguagePlausibility.IsClearlyMorePlausible("rfr ns levftim","как ты д�
 Eq(LanguagePlausibility.IsClearlyMorePlausible("levftim","думаешь",KeyboardLayout.English),true,"conversational inflection is learned from independent corpus");
 Eq(LanguagePlausibility.IsClearlyMorePlausible("ns pyftim","ты знаешь",KeyboardLayout.English),true,"other conversational inflections improve without a whitelist");
 Eq(LanguagePlausibility.IsClearlyMorePlausible("как ты думаешь","rfr ns levftim",KeyboardLayout.Russian),false,"proper Russian phrase does not suggest English corruption");
+int backspaceSnapshotReads=0;
+EditorSnapshot? ReadForBackspaceTest() { backspaceSnapshotReads++; return measurable; }
+Eq(KeyboardHookPump.SnapshotForKey(0x08,ReadForBackspaceTest),null,"Backspace never needs an editor snapshot on the hook thread");
+Eq(backspaceSnapshotReads,0,"Backspace bypasses all provider focus checks");
+Eq(KeyboardHookPump.SnapshotForKey(0x27,ReadForBackspaceTest),measurable,"Right retains checked acceptance snapshot");
+Eq(backspaceSnapshotReads,1,"only keys needing context invoke the snapshot reader");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);
