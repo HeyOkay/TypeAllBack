@@ -7,8 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\TypeAllBack.ico</ApplicationIcon>
   </PropertyGroup>
-<ItemGroup><Compile Remove="Tests\**\*.cs" />
+<ItemGroup>
+  <Resource Include="Assets\TypeAllBack.ico" />
+  <Compile Remove="Tests\**\*.cs" />
   <EmbeddedResource Include="Models\en.json" LogicalName="LayoutPreview.Models.en.json" />
   <EmbeddedResource Include="Models\ru.json" LogicalName="LayoutPreview.Models.ru.json" />
 </ItemGroup></Project>

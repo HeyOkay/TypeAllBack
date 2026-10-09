@@ -42,6 +42,8 @@ internal sealed class SessionDebugWindow : Window
         _diagnostics = diagnostics; _capture = capture;
         _historyRenderer = new IncrementalHistory(_history);
         Title = "LayoutPreview — отладка сессии и правила";
+        Icon = System.Windows.Media.Imaging.BitmapFrame.Create(
+            new Uri("pack://application:,,,/Assets/TypeAllBack.ico", UriKind.Absolute));
         Width = 750; Height = 820; MinWidth = 550; MinHeight = 580;
         ShowActivated = false;
         Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)); Foreground = Brushes.Gainsboro;
