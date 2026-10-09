@@ -28,10 +28,10 @@ internal sealed class SessionDebugWindow : Window
     private string _shownBoundaries = "";
     private bool _shutdown;
 
-    public SessionDebugWindow(SessionDiagnostics diagnostics, Func<SessionDiagnosticFrame?> capture)
+    public SessionDebugWindow(SessionDiagnostics diagnostics, Func<SessionDiagnosticFrame?> capture, SessionStartRules rules)
     {
         _diagnostics = diagnostics; _capture = capture;
-        Title = "LayoutPreview — отладка сессии (M1.1)";
+        Title = "LayoutPreview — отладка сессии и правила";
         Width = 750; Height = 820; MinWidth = 550; MinHeight = 580;
         ShowActivated = false;
         Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)); Foreground = Brushes.Gainsboro;
@@ -54,6 +54,36 @@ internal sealed class SessionDebugWindow : Window
         clear.Click += (_, _) => { _diagnostics.ClearHistory(); _lastSession.Clear(); Refresh(); };
         controls.Children.Add(clear); Grid.SetRow(controls, 1); root.Children.Add(controls);
         var textPanel = new StackPanel();
+        var rulePanel = new StackPanel { Margin = new Thickness(10) };
+        rulePanel.Children.Add(new TextBlock
+        {
+            Text = "Каждое правило включается отдельно. Изменение завершает текущую сессию; следующий ввод использует новые настройки. Настройки хранятся до перезапуска.",
+            TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightSteelBlue,
+            Margin = new Thickness(0, 0, 0, 8)
+        });
+        foreach (var rule in rules.Items)
+        {
+            var label = new StackPanel();
+            label.Children.Add(new TextBlock { Text = rule.Title, FontWeight = FontWeights.SemiBold });
+            label.Children.Add(new TextBlock { Text = rule.Description, TextWrapping = TextWrapping.Wrap,
+                FontSize = 11, Foreground = Brushes.LightSteelBlue, Margin = new Thickness(0, 3, 0, 0) });
+            var toggle = new CheckBox { Content = label, IsChecked = rule.Enabled,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 7, 0, 7) };
+            System.Windows.Automation.AutomationProperties.SetName(toggle, rule.Title);
+            toggle.Checked += (_, _) => rules.SetEnabled(rule.Id, true);
+            toggle.Unchecked += (_, _) => rules.SetEnabled(rule.Id, false);
+            rulePanel.Children.Add(toggle);
+        }
+        rulePanel.Children.Add(new TextBlock
+        {
+            Text = "Переключатели управляют только началом сессии. Проверки поля, текста, диапазона и защищённых контекстов обязательны.",
+            TextWrapping = TextWrapping.Wrap, Foreground = Brushes.LightSteelBlue,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+        var ruleList = new Expander { Header = "Правила начала сессии", Content = rulePanel,
+            IsExpanded = true, Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 0, 0, 8) };
+        // Dedicated list above the text fields, with the whole area scrollable on small screens.
+        textPanel.Children.Add(ruleList);
         AddField(textPanel, "Подтверждено редактором", _confirmed);
         AddField(textPanel, "Ожидаемый текст после всех захваченных клавиш", _expected);
         AddField(textPanel, "Предполагаемая замена всей сессии", _replacement);
@@ -66,7 +96,7 @@ internal sealed class SessionDebugWindow : Window
         events.Children.Add(new TextBlock { Text = "События и причины · последние 200", FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 6) });
         Grid.SetRow(_history, 1); events.Children.Add(_history); Grid.SetRow(events, 3); root.Children.Add(events);
-        var footer = new TextBlock { Text = "M1.1: наблюдение текущей логики. Лимит 10 слов и переключатели правил — следующий этап.\n" +
+        var footer = new TextBlock { Text = "Правила начала доступны в отдельном списке выше. Лимит 10 слов — следующий этап.\n" +
             "Закрытие скрывает окно; утилита продолжает работать. Пауза останавливает только просмотр.",
             Foreground = Brushes.LightSteelBlue, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
         Grid.SetRow(footer, 4); root.Children.Add(footer); Content = root;

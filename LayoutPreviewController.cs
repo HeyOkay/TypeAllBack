@@ -7,6 +7,31 @@ public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
     private readonly SessionDiagnostics _diagnostics = new();
+    private readonly SessionStartRules _startRules = new();
+    private SessionStartRuleId? _lastDeniedRule;
+    private long _rulesChangedSequence = -1;
+
+    private bool CanStart(SessionStartRuleId id)
+    {
+        if (_startRules.Allows(id)) { _lastDeniedRule = null; return true; }
+        if (_lastDeniedRule != id)
+        {
+            Diagnostic("Начало отключено", _startRules.Get(id).Title);
+            _lastDeniedRule = id;
+        }
+        return false;
+    }
+
+    private void OnStartRuleChanged(SessionStartRule rule)
+    {
+        // Keys already captured with the previous policy cannot restart a session.
+        _rulesChangedSequence = _keyboard?.LastSequence ?? -1;
+        Diagnostic("Правило изменено", rule.Title + (rule.Enabled ? " — включено" : " — выключено"));
+        Reset("Изменены правила начала сессии");
+        _acceptedInput.Disarm(); _acceptedEditor = null;
+        _controlDown = _altDown = _winDown = false;
+        _lastDeniedRule = null;
+    }
     private readonly AcceptDiagnosticListener _acceptDiagnostics = new();
     private SessionDebugWindow? _debugWindow;
     private string _debugConfirmed = "";
@@ -122,7 +147,8 @@ public sealed class LayoutPreviewController : IDisposable
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
         _preview.AcceptRequested += (_, _) => { _acceptSource = "Мышь"; AcceptPreview(); };
-        _debugWindow = new SessionDebugWindow(_diagnostics, CaptureDiagnostics);
+        _startRules.Changed += OnStartRuleChanged;
+        _debugWindow = new SessionDebugWindow(_diagnostics, CaptureDiagnostics, _startRules);
         if (!Environment.GetCommandLineArgs().Contains("--no-debug-window")) _debugWindow.Show();
         _watch.Tick += (_, _) => UpdatePreview();
         _deferredStartupWatch.Tick += (_, _) => TryAttachDeferredStartup();
@@ -144,6 +170,7 @@ public sealed class LayoutPreviewController : IDisposable
         bool isDown = message is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN;
         bool isUp = message is 0x0101 or 0x0105; // WM_KEYUP / WM_SYSKEYUP
         if (!isDown && !isUp) return Next();
+        if (input.Sequence <= _rulesChangedSequence) return Next();
         if (isDown && vk == 0x7B && input.Control && input.Alt)
         { _debugWindow?.Toggle(); return Next(); }
 
@@ -273,6 +300,8 @@ public sealed class LayoutPreviewController : IDisposable
             }
             // Handle native selection replacement BEFORE the dormant-selection
             // return. Otherwise its first key reaches the app but is never captured.
+            if (!CanStart(SessionStartRuleId.SelectionReplacement))
+            { Reset("Начало при замене выделения отключено"); return Next(); }
             BeginDiagnosticSession("Ввод вместо выделения", selectedStart);
             _session = InputSession.FromSelectionReplacement(snapshot.Text, selectedStart, selectedEnd, guardKey, layout);
             _editor = snapshot with { Text = "" };
@@ -336,6 +365,7 @@ public sealed class LayoutPreviewController : IDisposable
         if (!KeyboardConversion.TryConvert(key, layout, out _) || snapshot.SelectionStart != snapshot.SelectionEnd) { Reset("Непечатающая клавиша или активное выделение"); return Next(); }
         if (_session == null)
         {
+            if (!CanStart(SessionStartRuleId.DirectTyping)) return Next();
             BeginDiagnosticSession("Первый подходящий символ", snapshot.SelectionEnd);
             _session = new InputSession(snapshot.Text, snapshot.SelectionEnd, layout); _editor = snapshot with { Text = "" };
             _uiaStartupUnconfirmed = snapshot.AutomationIdentity.Length > 0;
@@ -543,6 +573,7 @@ public sealed class LayoutPreviewController : IDisposable
 
     private bool TryQueueDeferredStartup(Native.KBDLLHOOKSTRUCT data, bool shift)
     {
+        if (!CanStart(SessionStartRuleId.DeferredStartup)) return false;
         bool capsLock = _capturedCapsLock;
         var foreground = Native.GetForegroundWindow();
         if (foreground == IntPtr.Zero) return false;
@@ -582,6 +613,7 @@ public sealed class LayoutPreviewController : IDisposable
     private bool TryAttachDeferredStartup(EditorSnapshot snapshot)
     {
         if (_deferredStartupInputs.Count == 0) return false;
+        if (!CanStart(SessionStartRuleId.DeferredStartup)) { ClearDeferredStartup(); return false; }
         if (Environment.TickCount64 > _deferredStartupUntil)
         { ClearDeferredStartup(); return false; }
         if (snapshot.Foreground != _deferredStartupForeground || snapshot.Thread != _deferredStartupThread ||
@@ -718,6 +750,7 @@ public sealed class LayoutPreviewController : IDisposable
     }
     public void Dispose()
     {
+        _startRules.Changed -= OnStartRuleChanged;
         TextEditor.SnapshotChanged -= OnSnapshotChanged;
         _disposed = true; Reset("Утилита остановлена");
         _debugWindow?.Shutdown();

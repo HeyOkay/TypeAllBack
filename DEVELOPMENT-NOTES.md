@@ -1,5 +1,14 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user reiterated that debug must contain a separate list of independently
+  switchable session start rules. Added direct typing, selection replacement and
+  deferred startup gates covering the three existing creation paths. Defaults retain
+  prior behavior; switches apply live, reset the current session with an explicit reason,
+  clear pending input/accepted suppression and reject keys captured under the previous
+  policy. Settings are memory-only. Validation/security checks cannot be disabled.
+  Runtime UI checks remain with the user per their request.
+
+
 - 2026-10-09, current-state interview: Chrome, Discord, ChatGPT and Notepad show
   no noticeable lag and no reported false hints. Backspace and selection replacement
   work. Accept can leave the first character or part of a sentence unchanged,
