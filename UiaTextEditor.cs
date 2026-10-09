@@ -179,6 +179,36 @@ internal sealed class UiaTextEditor : IDisposable
         return true;
     }
 
+    public async Task<bool> TryForwardEnterAsync(EditorSnapshot expected, Func<bool> stillValid)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _commands.Enqueue(() =>
+        {
+            try
+            {
+                using var measurement = PerformanceDiagnostics.Measure("enter-replay");
+                bool Valid() => !cancellation.IsCancellationRequested && stillValid();
+                bool confirmed = Valid() && Capture(out var current, out _, out _, out _, false) &&
+                    current != null && EnterReplay.Matches(expected, current);
+                if (!confirmed || !Valid() || Native.GetForegroundWindow() != expected.Foreground ||
+                    Native.IsKeyDown(Native.VK_SHIFT) || Native.IsKeyDown(Native.VK_CONTROL) ||
+                    Native.IsKeyDown(Native.VK_MENU) || Native.IsKeyDown(Native.VK_LWIN) || Native.IsKeyDown(Native.VK_RWIN))
+                { result.TrySetResult(false); return; }
+                var gui = new Native.GUITHREADINFO { cbSize = Marshal.SizeOf<Native.GUITHREADINFO>() };
+                bool sameFocus = Native.GetGUIThreadInfo(Native.GetWindowThreadProcessId(expected.Foreground, IntPtr.Zero), ref gui) &&
+                    (gui.hwndFocus == IntPtr.Zero ? expected.Foreground : gui.hwndFocus) == expected.Editor;
+                // No retries: an ambiguous partial SendInput cannot send another Enter.
+                result.TrySetResult(sameFocus && Valid() && Native.GetForegroundWindow() == expected.Foreground && EnterReplay.Send());
+            }
+            catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or ElementNotAvailableException)
+            { result.TrySetResult(false); }
+        });
+        _wake.Set();
+        try { return await result.Task.WaitAsync(TimeSpan.FromSeconds(2)); }
+        catch (TimeoutException) { cancellation.Cancel(); return false; }
+    }
+
     public async Task<bool> TryReplaceAsync(EditorSnapshot expected, InputSession session, IntPtr layout, Func<bool> stillValid)
     {
         using var cancellation = new CancellationTokenSource();

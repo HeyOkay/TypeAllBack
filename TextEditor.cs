@@ -1,4 +1,4 @@
-namespace LayoutPreviewPrototype;
+﻿namespace LayoutPreviewPrototype;
 
 // Native Edit/RichEdit and UI Automation share the same checked session contract.
 internal static class TextEditor
@@ -26,6 +26,9 @@ internal static class TextEditor
 
     public static Task<bool> TrySwitchLayoutAsync(EditorSnapshot expected, InputSession session, IntPtr layout) =>
         Automation.TrySwitchLayoutAsync(expected, session, layout);
+
+    public static Task<bool> TryForwardEnterAsync(EditorSnapshot expected, Func<bool> stillValid) =>
+        Automation.TryForwardEnterAsync(expected, stillValid);
 
     public static Task<bool> TryReplaceAsync(EditorSnapshot expected, InputSession session, IntPtr layout, Func<bool> stillValid) =>
         Automation.TryReplaceAsync(expected, session, layout, stillValid);

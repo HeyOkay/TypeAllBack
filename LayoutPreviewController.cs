@@ -7,6 +7,8 @@ public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
     private double _lastHookCaptureMs;
+    private bool _forwardEnter;
+    private long _enterSequence, _enterEpoch;
     private readonly SessionDiagnostics _diagnostics = new();
     private SessionInputLog? _inputLog;
     private SessionInputLog InputLog => _inputLog ??= new SessionInputLog(_diagnostics);
@@ -174,10 +176,18 @@ public sealed class LayoutPreviewController : IDisposable
         Application.Current.Dispatcher.BeginInvoke(() =>
         { if (!_disposed) Diagnostic("Оценка шрифта", message); }, DispatcherPriority.Background);
     }
+    private void OnAutoEnterChanged(bool enabled)
+    {
+        _rulesChangedSequence = _keyboard?.LastSequence ?? -1;
+        _keyboard?.CompleteEnter();
+        Reset("Изменён режим исправления перед Enter");
+        Diagnostic("Автоисправление Enter", enabled ? "Включено для поддерживаемых полей; только при подтверждённой подсказке" : "Выключено");
+    }
     private void OnPreviewThemeChanged(string theme) => Diagnostic("Оформление", theme);
     public void Start()
     {
         Trace.Listeners.Add(_acceptDiagnostics);
+        AutoEnterOptions.Changed += OnAutoEnterChanged;
         RangeFontExperiment.Changed += OnRangeFontChanged;
         RangeFontExperiment.Diagnostic += OnRangeFontDiagnostic;
         _preview.ThemeChanged += OnPreviewThemeChanged;
@@ -253,6 +263,18 @@ public sealed class LayoutPreviewController : IDisposable
         }
         if (isUp) return Next();
         if ((data.flags & Native.LLKHF_INJECTED) != 0 && data.dwExtraInfo == Native.LayoutPreviewInput) return Next();
+        if (input.AcceptedEnter)
+        {
+            if (!AutoEnterOptions.Enabled || !_visible || _session?.Preview.Length is not > 0 ||
+                _keyboard == null || _keyboard.LastSequence != input.Sequence || _keyboard.LastInputEpoch != input.InputEpoch)
+            {
+                Diagnostic("Enter отменён", "Подсказка или состояние ввода изменились после перехвата");
+                _keyboard?.CompleteEnter(); return Next();
+            }
+            _forwardEnter = true; _enterSequence = input.Sequence; _enterEpoch = input.InputEpoch; _acceptSource = "Enter";
+            Diagnostic("Автоисправление Enter", "Enter задержан до проверки исправленного текста");
+            _accepting = true; Application.Current.Dispatcher.BeginInvoke(AcceptPreview); return (IntPtr)1;
+        }
         if (_accepting) { Trace.WriteLine("Accept cancelled by intervening input"); Reset("Принятие отменено новым вводом"); return Next(); }
         if ((data.flags & Native.LLKHF_INJECTED) != 0 && !_testInput) { Reset("Внешний синтетический ввод"); return Next(); }
         if (vk is 0x10 or 0xA0 or 0xA1) return Next();
@@ -790,15 +812,21 @@ public sealed class LayoutPreviewController : IDisposable
     }
     private async void AcceptPreview()
     {
-        if (_disposed || !_visible || _session == null || _editor == null || _session.Preview.Length == 0) { _accepting = false; return; }
+        bool forwardEnter = _forwardEnter; _forwardEnter = false;
+        long reservedSequence = _enterSequence;
+        long reservedEpoch = _enterEpoch;
+        if (_disposed || !_visible || _session == null || _editor == null || _session.Preview.Length == 0)
+        { _accepting = false; if (forwardEnter) { Diagnostic("Enter отменён", "Нет действующей подсказки"); _keyboard?.CompleteEnter(); } return; }
         if (_keyboard != null) _keyboard.AcceptContext = null;
         _acceptDiagnostics.Begin(_diagnostics.SessionId);
         Diagnostic("Принятие", _acceptSource + ": проверка сессии и текущего участка");
         _accepting = true; var session = _session; var trackedSession = _session; var editor = _editor; int generation = _generation;
         bool replacementConfirmed = false;
+        bool EnterValid() => !forwardEnter || (AutoEnterOptions.Enabled && _keyboard?.LastSequence == reservedSequence && _keyboard.LastInputEpoch == reservedEpoch);
         IntPtr originalLayout = IntPtr.Zero;
         try
         {
+            if (!EnterValid()) { Diagnostic("Enter отменён", "После перехвата поступил новый ввод"); return; }
             if (!TextEditor.TryRead(out var current) || !TextEditor.SameEditor(editor, current)) { Diagnostic("Отказ", "Недоступен исходный редактор перед принятием: " + TextEditor.LastCaptureFailure); return; }
             // A click can arrive while the UIA cache still lags behind the keystrokes
             // that formed the visible preview. Wait briefly for an exact text/caret
@@ -820,12 +848,12 @@ public sealed class LayoutPreviewController : IDisposable
             session = active;
             Diagnostic("Принятие", $"Проверен текущий участок [{session.Start}, {session.End}), символов {session.Source.Length}; предыдущие участки вне замены");
             originalLayout = current.Layout;
-            if (!await TextEditor.TrySwitchLayoutAsync(editor, session, _targetLayout) || generation != _generation) { Diagnostic("Отказ", "Переключение раскладки не подтверждено или операция отменена"); Trace.WriteLine("Accept switch failed"); return; }
+            if (!EnterValid() || !await TextEditor.TrySwitchLayoutAsync(editor, session, _targetLayout) || generation != _generation || !EnterValid()) { Diagnostic("Отказ", "Переключение раскладки не подтверждено или операция отменена"); Trace.WriteLine("Accept switch failed"); return; }
             Diagnostic("Принятие", "Целевая раскладка подтверждена; начинается проверенная замена");
             Trace.WriteLine("Accept layout switched");
             if (generation == _generation)
             {
-                bool replaced = await TextEditor.TryReplaceAsync(editor, session, _targetLayout, () => generation == _generation && _accepting);
+                bool replaced = await TextEditor.TryReplaceAsync(editor, session, _targetLayout, () => generation == _generation && _accepting && EnterValid());
                 replacementConfirmed = replaced;
                 Diagnostic("Замена", replaced ? "Полный результат подтверждён редактором" : "Результат замены не подтверждён; подробности в событиях backend");
                 Trace.WriteLine("Accept replace result: " + replaced);
@@ -839,16 +867,26 @@ public sealed class LayoutPreviewController : IDisposable
             }
             // Provider verification precedes the visual completion. Do not hide
             // an unaccepted hint, or leave a 90-ms editing gap before replacement.
-            if (replacementConfirmed) await _preview.PlayAcceptAnimationAsync();
+            if (replacementConfirmed && forwardEnter)
+            {
+                string corrected = current.Text.Remove(session.Start, session.Source.Length).Insert(session.Start, session.Replacement);
+                var expectedAfter = current with { Text = corrected, SelectionStart = session.Start + session.Replacement.Length,
+                    SelectionEnd = session.Start + session.Replacement.Length, Layout = _targetLayout };
+                bool sent = await TextEditor.TryForwardEnterAsync(expectedAfter,
+                    () => generation == _generation && _accepting && EnterValid());
+                Diagnostic(sent ? "Enter передан" : "Enter отменён", sent ? "Исправленный текст проверен; одна пара Enter down/up передана приложению" : "Не подтверждены текст, поле, каретка или неизменность ввода; повторной отправки нет");
+            }
+            else if (replacementConfirmed) await _preview.PlayAcceptAnimationAsync();
         }
         catch (Exception error) { Diagnostic("Ошибка принятия", error.GetType().Name); Trace.WriteLine("Accept exception: " + error.GetType().Name); }
         finally
         {
+            if (forwardEnter) { _keyboard?.CompleteEnter(); if (!replacementConfirmed) Diagnostic("Enter отменён", "Замена не подтверждена; исходный Enter не передан"); }
             Trace.WriteLine("Accept finished");
             bool retryable = !replacementConfirmed && generation == _generation && _session == trackedSession &&
                 TextEditor.TryRead(out var unchanged) && TextEditor.SameEditor(editor, unchanged) &&
                 session.Matches(unchanged.Text, unchanged.SelectionStart, unchanged.SelectionEnd);
-            if (retryable && originalLayout != IntPtr.Zero)
+            if (retryable && originalLayout != IntPtr.Zero && EnterValid())
                 await TextEditor.TrySwitchLayoutAsync(editor, session, originalLayout);
             _accepting = false;
             if (retryable && generation == _generation) { Diagnostic("Повтор доступен", "Исходные текст и каретка подтверждены; подсказка сохранена"); UpdatePreview(); }
@@ -884,6 +922,7 @@ public sealed class LayoutPreviewController : IDisposable
     }
     public void Dispose()
     {
+        AutoEnterOptions.Changed -= OnAutoEnterChanged;
         RangeFontExperiment.Changed -= OnRangeFontChanged;
         RangeFontExperiment.Diagnostic -= OnRangeFontDiagnostic;
         _preview.ThemeChanged -= OnPreviewThemeChanged;

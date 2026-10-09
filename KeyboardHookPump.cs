@@ -5,7 +5,7 @@ namespace LayoutPreviewPrototype;
 
 internal readonly record struct CapturedKeyboardInput(Native.KBDLLHOOKSTRUCT Data, int Message,
     bool Shift, bool CapsLock, bool Control, bool Alt, bool Win, EditorSnapshot? Snapshot,
-    long Sequence, long CapturedAt, bool AcceptedRight, double HookCaptureMs = 0);
+    long Sequence, long CapturedAt, bool AcceptedRight, double HookCaptureMs = 0, bool AcceptedEnter = false, long InputEpoch = 0);
 internal sealed record KeyboardAcceptContext(EditorSnapshot Editor, long Sequence);
 
 // Never wait for WPF, read document text, call COM, or render on this thread.
@@ -17,9 +17,12 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
     private uint _threadId;
     private IntPtr _hook;
     private Exception? _error;
-    private long _sequence;
+    private long _sequence, _inputEpoch;
+    public long LastInputEpoch => Interlocked.Read(ref _inputEpoch);
     private int _disposeState;
     private KeyboardAcceptContext? _acceptContext;
+    private readonly EnterReservation _enter = new();
+    public void CompleteEnter() => _enter.Complete();
     public long LastSequence => Interlocked.Read(ref _sequence);
     public bool IsRunning => _thread?.IsAlive == true;
     public uint ThreadId => Volatile.Read(ref _threadId);
@@ -66,16 +69,23 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
         long beforeSequence = LastSequence;
         bool accepted = relevantDown && data.vkCode == Native.VK_RIGHT && !shift && !control && !alt && !win &&
             ((data.flags & Native.LLKHF_INJECTED) == 0 || testInput) && CanAccept(AcceptContext, snapshot, beforeSequence);
+        bool enterEligible = relevantDown && AutoEnterOptions.Enabled &&
+            ((data.flags & Native.LLKHF_INJECTED) == 0 || testInput) && CanAccept(AcceptContext, snapshot, beforeSequence);
+        var enter = _enter.Handle(data.vkCode, down, message is 0x0101 or 0x0105,
+            !shift && !control && !alt && !win, enterEligible);
+        if (enter == EnterDisposition.Suppress) return (IntPtr)1;
+        bool acceptedEnter = enter == EnterDisposition.Intercept;
+        long inputEpoch = down ? Interlocked.Increment(ref _inputEpoch) : LastInputEpoch;
         long sequence = relevantDown ? Interlocked.Increment(ref _sequence) : beforeSequence;
         if (relevantDown) Interlocked.Exchange(ref _acceptContext, null);
         try
         {
             deliver(new(data, message, shift, (Native.GetKeyState(0x14) & 1) != 0, control, alt, win,
                 snapshot, sequence, Environment.TickCount64, accepted,
-                Stopwatch.GetElapsedTime(captureStarted).TotalMilliseconds));
+                Stopwatch.GetElapsedTime(captureStarted).TotalMilliseconds, acceptedEnter, inputEpoch));
         }
-        catch (InvalidOperationException) { accepted = false; } // Dispatcher is shutting down: pass through.
-        return accepted ? (IntPtr)1 : Native.CallNextHookEx(_hook, code, wParam, lParam);
+        catch (InvalidOperationException) { accepted = acceptedEnter = false; _enter.Abandon(); } // Dispatcher is shutting down: pass through.
+        return accepted || acceptedEnter ? (IntPtr)1 : Native.CallNextHookEx(_hook, code, wParam, lParam);
     }
     private static EditorSnapshot? ReadSnapshot() => TextEditor.TryReadForHook(out var snapshot) ? snapshot : null;
     internal static EditorSnapshot? SnapshotForKey(uint key, Func<EditorSnapshot?> read) =>

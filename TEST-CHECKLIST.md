@@ -41,3 +41,16 @@
   Old hint must not reappear; subsequent input belongs to an empty new section.
 - Check both conversion directions and prefix `OLD ` in Notepad/ChatGPT/Discord/Chrome.
 - Automatic layout switching during accept must not emit manual section boundaries.
+
+
+## Opt-in Enter correction
+
+- Initially disabled: Enter stays native. Enable «Исправлять перед Enter» in debug.
+- In a test chat type `ghbdtn`, wait for the visible hint, press plain Enter:
+  only `привет` should be sent once. Repeat opposite direction.
+- Correct text/no hint: Enter remains native. Shift+Enter keeps chat line break.
+- Hold or double Enter during correction: no repeated automatic submission.
+- Manual layout sections: only current section is corrected before Enter.
+- Input/modifier/focus change before completion: forwarding is cancelled with log reason.
+- Disabling the option resets its current session; restart defaults to disabled.
+- Do not claim a successful real send based on return values alone: verify in chat.

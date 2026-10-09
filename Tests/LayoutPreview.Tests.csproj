@@ -14,6 +14,7 @@
     <Compile Include="../AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
     <Compile Include="../Native.cs" Link="Native.cs" />
     <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
+    <Compile Include="../AutoEnter.cs" Link="AutoEnter.cs" />
     <Compile Include="../PreviewMetrics.cs" Link="PreviewMetrics.cs" />
     <Compile Include="../UiaRangeFont.cs" Link="UiaRangeFont.cs" />
     <Compile Include="../PreviewFontResolver.cs" Link="PreviewFontResolver.cs" />

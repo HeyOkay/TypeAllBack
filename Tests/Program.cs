@@ -1,4 +1,4 @@
-using LayoutPreviewPrototype;
+﻿using LayoutPreviewPrototype;
 using System.Runtime.InteropServices;
 using System.Text;
 if (args.Contains("--debug-history-benchmark")) { DebugHistoryBenchmark.Run(); return; }
@@ -714,6 +714,30 @@ var historyThread=new Thread(()=> {
 });
 historyThread.SetApartmentState(ApartmentState.STA);historyThread.Start();historyThread.Join();
 if(historyError!=null)throw historyError;
+Eq(AutoEnterOptions.Enabled,false,"automatic Enter correction is opt-in");
+var enterGate=new EnterReservation();
+Eq(enterGate.Handle(0x0D,true,false,true,false),EnterDisposition.Native,"Enter without valid preview stays native");
+Eq(enterGate.Handle(0x0D,true,false,false,true),EnterDisposition.Native,"Shift or modified Enter stays native");
+Eq(enterGate.Handle(0x0D,true,false,true,true),EnterDisposition.Intercept,"one plain Enter reserves correction");
+Eq(enterGate.Handle(0x0D,true,false,true,true),EnterDisposition.Suppress,"held Enter cannot reserve a second submission");
+Eq(enterGate.Handle(0x0D,false,true,true,false),EnterDisposition.Suppress,"physical keyup of intercepted Enter is swallowed");
+Eq(enterGate.Handle(0x0D,true,false,true,true),EnterDisposition.Suppress,"second press while correction is pending is suppressed");
+enterGate.Handle(0x0D,false,true,true,false);enterGate.Complete();
+Eq(enterGate.Handle(0x0D,true,false,true,true),EnterDisposition.Intercept,"a later independent Enter can reserve again");
+enterGate.Complete();
+Eq(enterGate.Handle(0x0D,true,false,true,true),EnterDisposition.Suppress,"completion while physically held does not enable autorepeat");
+Eq(EnterReplay.Matches(measurable,measurable),true,"forwarding requires the exact checked editor state");
+Eq(EnterReplay.Matches(measurable,measurable with {Text="changed"}),false,"changed text cancels forwarding");
+Eq(EnterReplay.Matches(measurable,measurable with {Editor=(IntPtr)999}),false,"changed field cancels forwarding");
+Eq(EnterReplay.Matches(measurable,measurable with {SelectionStart=0}),false,"changed selection cancels forwarding");
+var replayKeys=EnterReplay.Inputs();
+Eq(replayKeys.Length,2,"forwarded Enter is exactly one down/up pair");
+Eq(replayKeys[0].U.ki.dwExtraInfo,Native.LayoutPreviewInput,"synthetic Enter bypasses reinterception");
+Eq(replayKeys[1].U.ki.dwFlags,Native.KEYEVENTF_KEYUP,"forwarded Enter includes key release");
+Eq(EnterReplay.Matches(measurable,measurable with {Layout=(IntPtr)0x04190419}),false,"changed layout cancels forwarding");
+var abandoned=new EnterReservation();abandoned.Handle(0x0D,true,false,true,true);abandoned.Abandon();
+Eq(abandoned.Handle(0x0D,false,true,true,false),EnterDisposition.Native,"failed dispatcher delivery restores native keyup");
+Eq(replayKeys[0].U.ki.wVk,(ushort)0x0D,"replay sends Enter, not text or another key");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);

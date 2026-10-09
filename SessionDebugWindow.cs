@@ -103,6 +103,11 @@ internal sealed class SessionDebugWindow : Window
         fontExperiment.Checked += (_, _) => RangeFontExperiment.SetEnabled(true);
         fontExperiment.Unchecked += (_, _) => RangeFontExperiment.SetEnabled(false);
         textPanel.Children.Add(fontExperiment);
+        var autoEnter = new CheckBox { Content = "Исправлять перед Enter (эксперимент)", IsChecked = AutoEnterOptions.Enabled,
+            Margin = new Thickness(0, 4, 0, 8), ToolTip = "По умолчанию выключено. Только при подтверждённой подсказке. Shift+Enter и другие сочетания — обычные. При неопределённом результате Enter отменяется. Режим для проверки ChatGPT/Discord; назначение Enter определяет само приложение." };
+        autoEnter.Checked += (_, _) => AutoEnterOptions.SetEnabled(true);
+        autoEnter.Unchecked += (_, _) => AutoEnterOptions.SetEnabled(false);
+        textPanel.Children.Add(autoEnter);
         AddField(textPanel, "Подтверждено редактором", _confirmed);
         AddField(textPanel, "Ожидаемый текст после всех захваченных клавиш", _expected);
         AddField(textPanel, "Предполагаемая замена всей сессии", _replacement);
