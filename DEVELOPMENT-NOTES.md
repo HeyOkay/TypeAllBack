@@ -1,5 +1,18 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user confirmed oversized preview font persists in Chrome's address
+  bar. The earlier glyph-height protection was tested with reliableFormatting=false,
+  but production passed true for any nonempty UIA FontSource, bypassing that limit.
+  Identify omnibox formatting by OmniboxViewViews class or its Ctrl+L accelerator,
+  mark it UIA omnibox and use the existing glyph/DPI bound for that source only.
+  Other UIA/native font metadata retain their existing behavior. No localized field
+  names or subtree discovery is used. Debug now exposes font metadata/resolved DIP,
+  DPI scales and caret geometry through an opt-in-view filterable event; no input
+  text is added to these metrics. User runtime confirmation remains pending.
+  Chromium reference for view class/accessible Ctrl+L:
+  https://chromium.googlesource.com/chromium/src/+/3055ddf805d4bd4923d9702a698a8556a91874f9/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+
+
 - 2026-10-10: user asked for system theme detection because the dark popup does not
   suit light Windows, and asked whether Mica can be used. Preview now follows the
   Windows app light/dark preference (shell preference fallback) and high-contrast

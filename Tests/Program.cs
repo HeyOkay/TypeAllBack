@@ -541,4 +541,17 @@ Eq(highContrastPalette.Mode, PreviewThemeMode.HighContrast, "high contrast overr
 Eq(highContrastPalette.Background, System.Windows.Media.Colors.Black, "high contrast respects the selected system background");
 Eq(highContrastPalette.Text, System.Windows.Media.Colors.Yellow, "high contrast respects the selected system foreground");
 Eq(highContrastPalette.Border, highContrastPalette.Text, "high contrast border remains visible");
+Eq(UiaTextEditor.IsOmniboxFormatting("OmniboxViewViews", ""), true, "Chromium address view is identified without localized names");
+Eq(UiaTextEditor.IsOmniboxFormatting("", "Ctrl + L"), true, "omnibox keyboard shortcut survives whitespace formatting");
+Eq(UiaTextEditor.IsOmniboxFormatting("Textfield", "Control+L"), true, "omnibox can be identified when UIA exposes only a generic class");
+Eq(UiaTextEditor.IsOmniboxFormatting("Textfield", ""), false, "ordinary webpage text fields do not receive omnibox metrics");
+Eq(PreviewMetrics.HasReliableFormatting("UIA omnibox"), false, "omnibox metadata cannot bypass glyph limits in the actual renderer path");
+Eq(PreviewMetrics.HasReliableFormatting("UIA character"), true, "other UIA glyph formatting remains unchanged");
+Eq(PreviewMetrics.HasReliableFormatting("Win32 HFONT"), true, "native font metrics remain authoritative");
+foreach (uint dpi in new uint[] { 96, 144, 192 })
+    Eq(PreviewMetrics.ResolveFontSize(24, (int)(20 * dpi / 96), dpi, 15, true,
+        PreviewMetrics.HasReliableFormatting("UIA omnibox")), 16.0,
+        "production omnibox path limits inflated attributes at multiple DPI scales");
+Eq(PreviewMetrics.ResolveFontSize(12, 20, 96, 15, true, PreviewMetrics.HasReliableFormatting("UIA omnibox")), 12.0,
+    "omnibox metadata smaller than the limit is never enlarged");
 Console.WriteLine($"PASS: {checks} regression checks");

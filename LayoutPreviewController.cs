@@ -158,11 +158,13 @@ public sealed class LayoutPreviewController : IDisposable
             UpdatePreview();
         }, DispatcherPriority.Background);
     }
+    private void OnPreviewFontMetricsChanged(string metrics) => Diagnostic("Шрифт подсказки", metrics);
     private void OnPreviewThemeChanged(string theme) => Diagnostic("Оформление", theme);
     public void Start()
     {
         Trace.Listeners.Add(_acceptDiagnostics);
         _preview.ThemeChanged += OnPreviewThemeChanged;
+        _preview.FontMetricsChanged += OnPreviewFontMetricsChanged;
         Diagnostic("Оформление", _preview.ThemeDescription);
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
@@ -824,6 +826,7 @@ public sealed class LayoutPreviewController : IDisposable
     public void Dispose()
     {
         _preview.ThemeChanged -= OnPreviewThemeChanged;
+        _preview.FontMetricsChanged -= OnPreviewFontMetricsChanged;
         _startRules.Changed -= OnStartRuleChanged;
         TextEditor.SnapshotChanged -= OnSnapshotChanged;
         _disposed = true; Reset("Утилита остановлена");

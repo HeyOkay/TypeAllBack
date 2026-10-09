@@ -452,11 +452,12 @@ internal sealed class UiaTextEditor : IDisposable
                 start, end, caret, Native.GetDpiForWindow(focusHandle), identity, Environment.TickCount64);
             var context = snapshot;
             var selectedRange = selection;
+            var editableElement = element;
             snapshot = WithFormatting(context, presentation, () =>
             {
                 var formatting = GetFormattingRange(selectedRange);
                 return context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
-                    FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = "UIA character" };
+                    FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = ReadUiaFontSource(focused, editableElement) };
             });
             return true;
         }
@@ -652,6 +653,23 @@ internal sealed class UiaTextEditor : IDisposable
         if (before.Dpi != after.Dpi) return false;
         snapshot = CopyFormatting(after, styled) with { Caret = caret, CapturedAt = Environment.TickCount64 };
         return true;
+    }
+
+    internal static bool IsOmniboxFormatting(string className, string shortcut) =>
+        className.Equals("OmniboxViewViews", StringComparison.Ordinal) ||
+        className.Equals("Chrome_OmniboxView", StringComparison.Ordinal) ||
+        shortcut.Replace(" ", "").Equals("Ctrl+L", StringComparison.OrdinalIgnoreCase) ||
+        shortcut.Replace(" ", "").Equals("Control+L", StringComparison.OrdinalIgnoreCase);
+
+    private static string ReadUiaFontSource(AutomationElement focused, AutomationElement editable)
+    {
+        try
+        {
+            if (IsOmniboxFormatting(focused.Current.ClassName, focused.Current.AcceleratorKey) ||
+                IsOmniboxFormatting(editable.Current.ClassName, editable.Current.AcceleratorKey)) return "UIA omnibox";
+        }
+        catch (Exception error) when (error is InvalidOperationException or COMException or ElementNotAvailableException) { }
+        return "UIA character";
     }
 
     private static string ReadFontFamilyName(TextPatternRange range)

@@ -14,6 +14,7 @@ public partial class PreviewWindow : Window
 {
     public event EventHandler? AcceptRequested;
     internal event Action<string>? ThemeChanged;
+    internal event Action<string>? FontMetricsChanged;
     private readonly WindowsPreviewTheme _theme;
     internal string ThemeDescription { get; private set; } = "Тема ещё не определена";
 
@@ -107,7 +108,7 @@ public partial class PreviewWindow : Window
         PreviewBorder.BeginAnimation(WidthProperty, null);
         PreviewBorder.Width = double.NaN;
         double sourceSize = PreviewMetrics.ResolveFontSize(fontSizeDip, caretPx.Bottom - caretPx.Top,
-            targetDpi, PreviewText.FontSize / _layoutScale, animateFirstAppearance, fontSource.Length > 0);
+            targetDpi, PreviewText.FontSize / _layoutScale, animateFirstAppearance, PreviewMetrics.HasReliableFormatting(fontSource));
         PreviewText.FontSize = sourceSize * _layoutScale;
         PreviewText.Text = text.TrimEnd();
         // Measure the actual Display-mode TextBlock. FormattedText used different
@@ -148,6 +149,7 @@ public partial class PreviewWindow : Window
         if (fontDiagnostic != _lastFontDiagnostic)
         {
             Trace.WriteLine("Font metrics: " + fontDiagnostic);
+            FontMetricsChanged?.Invoke(fontDiagnostic);
             _lastFontDiagnostic = fontDiagnostic;
         }
 
