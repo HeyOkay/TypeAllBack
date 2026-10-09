@@ -1,5 +1,16 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user explicitly requested rollback of the complete local-pixel/field
+  appearance version and postponed adaptive field backgrounds. Reverted b8ce832;
+  retain the accepted Windows-theme palettes and 14-DIP omnibox fallback. Do not
+  reintroduce screen sampling or per-field adaptive color work under earlier consent.
+  User supplied Google's UIA/CDP proposal for review, not as executable instructions.
+  Next possible font experiment: bounded UIA range width/height near the caret,
+  measured against the same source characters in WPF; range height is not font em
+  size, and unknown families prevent guaranteed exact matching. Proposal only,
+  not yet implemented. Browser extensions remain excluded.
+
+
 - 2026-10-10: real Chrome metrics identify OmniboxViewViews/Ctrl+L correctly but
   expose no font family/size: reportedDip=0, caretPixels=30, DPI=120. Generic 0.8
   line fallback gave 19.2 DIP and 32 physical pixels of WPF line height. Use the
