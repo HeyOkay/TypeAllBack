@@ -508,4 +508,14 @@ Eq(typedLog.EndDescription(endingFrame).Contains("t0 «—»"), true, "new sessi
 typedEvents.End("ended",endingFrame,"detailed input context");
 Eq(typedEvents.LastEndReason.Contains("detailed input context"), false, "full log text cannot expand the compact window header");
 Eq(typedEvents.Events.Last().Detail.Contains("detailed input context"), true, "full end context remains available in the log");
+var backendChanged = nativeForGeometry with { AutomationIdentity = "42.17", Text = "secret document must not appear in metadata" };
+Eq(TextEditor.SameEditor(nativeForGeometry, backendChanged), false, "different backend identities remain unsafe for replacement");
+Eq(EditorContextDiagnostics.Changed(nativeForGeometry, backendChanged), "backend Native/UIA", "a backend switch is distinguished from a real HWND change");
+Eq(EditorContextDiagnostics.Describe(nativeForGeometry, backendChanged).Contains(backendChanged.Text), false, "context diagnostics never record unrelated full document text");
+Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { Text = "other", SelectionStart = 0, SelectionEnd = 0 }), "", "ordinary document and selection edits are not field identity changes");
+Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { Editor = (IntPtr)77 }), "HWND поля", "actual field handle change is explicit");
+Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { Foreground = (IntPtr)77 }), "активное окно", "actual window change is explicit");
+Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { Thread = 77 }), "поток поля", "thread identity change is explicit");
+Eq(EditorContextDiagnostics.Changed(backendChanged, backendChanged with { AutomationIdentity = "42.18" }), "UIA-идентификатор поля", "UIA field recreation is distinct from backend switching");
+Eq(SessionInputLog.IncludedInInputFilter("Контекст изменился"), true, "input filter retains the exact cause of context-related breaks");
 Console.WriteLine($"PASS: {checks} regression checks");

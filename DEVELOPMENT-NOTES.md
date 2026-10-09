@@ -1,5 +1,18 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user reported Notepad typing "руддщ ьк" with a session ending at t75
+  before that character was confirmed: "window or field changed". Found a concrete
+  backend-switch path: failed native geometry/format consistency could fall through
+  into a full UIA text snapshot and give the same HWND a new AutomationIdentity.
+  Known Edit/RichEdit classes now stay on the native backend; transient failed reads
+  publish unavailable state and use the existing bounded outage/reconciliation path.
+  UIA still enriches native presentation, and non-native editors still use UIA.
+  Added explicit old/new HWND/thread/backend/UIA-identity metadata on context changes,
+  retained by the input filter. No text-only adoption of another field is permitted.
+  The reported Notepad incident's exact identity difference remains unproven until
+  user verification; do not claim every field-change failure is fixed.
+
+
 - 2026-10-10: user approved a memory-only per-input log: physical sequence tN,
   visible whitespace/edit keys, projected session text, real calculated hint in
   brackets and distinct editor confirmation. Never calculate a new hint merely

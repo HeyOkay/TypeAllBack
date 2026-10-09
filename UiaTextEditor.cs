@@ -9,6 +9,7 @@ namespace LayoutPreviewPrototype;
 internal sealed class UiaTextEditor : IDisposable
 {
     private const int MaximumText = 65536;
+    private string _nativeCaptureFailure = "Native-снимок недоступен";
     private string _lastCaptureFailure = "Снимок ещё не получен";
     public string LastCaptureFailure => Volatile.Read(ref _lastCaptureFailure);
     private readonly ConcurrentQueue<Action> _commands = new();
@@ -327,7 +328,15 @@ internal sealed class UiaTextEditor : IDisposable
             var className = new System.Text.StringBuilder(256);
             Native.GetClassName(focusHandle, className, className.Capacity);
             nativeClass = className.ToString();
-            if (NotepadEditor.IsSupportedClass(className.ToString()) && CaptureNativeGeometry(out snapshot, presentation)) return true;
+            if (NotepadEditor.IsSupportedClass(nativeClass))
+            {
+                // A transient failed native read must not manufacture another UIA
+                // field identity for the same Edit/RichEdit HWND. UIA may enrich
+                // geometry/fonts inside CaptureNativeGeometry, not replace its backend.
+                bool captured = CaptureNativeGeometry(out snapshot, presentation);
+                stage = _nativeCaptureFailure;
+                return captured;
+            }
             using var captureMeasurement = PerformanceDiagnostics.Measure("uia-capture");
             var focused = AutomationElement.FocusedElement;
             stage = "UIA focused element";
@@ -573,6 +582,7 @@ internal sealed class UiaTextEditor : IDisposable
     {
         using var measurement = PerformanceDiagnostics.Measure("native-capture");
         snapshot = null;
+        _nativeCaptureFailure = "Первый native-снимок недоступен";
         if (!NotepadEditor.TryRead(out var before)) return false;
         if (!presentation) { snapshot = before; return true; }
         var caret = before.Caret;
@@ -630,9 +640,16 @@ internal sealed class UiaTextEditor : IDisposable
         });
         // COM can be slow and the user can edit/move the caret while it is running.
         // Publish its coordinates only if a fresh native read still matches.
-        if (!NotepadEditor.TryRead(out var after) || !TextEditor.SameEditor(before, after) ||
-            before.Text != after.Text || before.SelectionStart != after.SelectionStart ||
-            before.SelectionEnd != after.SelectionEnd || before.Dpi != after.Dpi) return false;
+        _nativeCaptureFailure = "Повторный native-снимок недоступен после чтения оформления";
+        if (!NotepadEditor.TryRead(out var after)) return false;
+        _nativeCaptureFailure = "Контекст native-поля изменился во время снимка";
+        if (!TextEditor.SameEditor(before, after)) return false;
+        _nativeCaptureFailure = "Текст native-поля изменился во время чтения оформления";
+        if (before.Text != after.Text) return false;
+        _nativeCaptureFailure = "Выделение native-поля изменилось во время чтения оформления";
+        if (before.SelectionStart != after.SelectionStart || before.SelectionEnd != after.SelectionEnd) return false;
+        _nativeCaptureFailure = "DPI native-поля изменился во время снимка";
+        if (before.Dpi != after.Dpi) return false;
         snapshot = CopyFormatting(after, styled) with { Caret = caret, CapturedAt = Environment.TickCount64 };
         return true;
     }

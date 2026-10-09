@@ -376,7 +376,8 @@ public sealed class LayoutPreviewController : IDisposable
             TryConfirmUiaStartup(snapshot);
         if (_session != null && (_editor == null || !TextEditor.SameEditor(_editor, snapshot)))
         {
-            Reset("Изменилось поле ввода");
+            Diagnostic("Контекст изменился", EditorContextDiagnostics.Describe(_editor, snapshot));
+            Reset("Изменилось поле ввода: " + EditorContextDiagnostics.Changed(_editor, snapshot));
         }
         else if (_session != null && _pendingInputs.Count > 0)
         {
@@ -472,7 +473,11 @@ public sealed class LayoutPreviewController : IDisposable
         bool recovered = _editorAvailability.Waiting;
         if (recovered) Diagnostic("Редактор доступен", $"Снимок восстановлен после {_editorAvailability.Duration(Environment.TickCount64)} мс; требуется подтверждение всей сессии");
         _editorAvailability.Reset();
-        if (_editor == null || !TextEditor.SameEditor(_editor, current)) { Reset("Смена окна или поля ввода"); return; }
+        if (_editor == null || !TextEditor.SameEditor(_editor, current))
+        {
+            Diagnostic("Контекст изменился", EditorContextDiagnostics.Describe(_editor, current));
+            Reset("Смена окна или поля ввода: " + EditorContextDiagnostics.Changed(_editor, current)); return;
+        }
         if (!recovered && _pendingInputs.Count == 0 && _lastVerifiedRevision == current.Revision && _lastVerifiedSource == _session.Source)
         { _editor = current with { Text = "" }; if (_visible) PublishAcceptContext(current); return; }
         TryConfirmUiaStartup(current);

@@ -51,5 +51,5 @@ internal sealed class SessionInputLog(SessionDiagnostics diagnostics)
     };
 
     public static bool IncludedInInputFilter(string kind) => kind is "Ввод" or "Подтверждение" or "Подсказка" or
-        "Начало" or "Окончание" or "Ожидание редактора" or "Редактор доступен" or "Начало уточнено";
+        "Начало" or "Окончание" or "Ожидание редактора" or "Редактор доступен" or "Начало уточнено" or "Контекст изменился";
 }
