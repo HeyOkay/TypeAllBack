@@ -28,11 +28,12 @@ internal sealed class UiaRangeFont
     private int _revision = -1, _attempts;
     private long _lastAttempt;
     private double _stable, _lastMs;
+    private bool _checkedReported, _correctedReported;
     public string Status { get; private set; } = "Оценка ещё не выполнялась";
     private string? _lastStatus;
     public event Action<string>? StatusChanged;
 
-    // Explicit font attributes take priority over an approximation based on widths.
+    // Reported attributes remain the baseline; long ranges may validate their size.
     internal static bool HasReportedFont(EditorSnapshot snapshot) =>
         double.IsFinite(snapshot.FontSizeDip) && snapshot.FontSizeDip is > 0 and <= 256 &&
         !string.IsNullOrWhiteSpace(snapshot.FontFamilyName) &&
@@ -42,13 +43,14 @@ internal sealed class UiaRangeFont
     // One early probe when the field first has two measurable characters;
     // subsequent failed attempts retain the 500 ms cooldown and six-attempt cap.
     internal bool NeedsInitialProbe(EditorSnapshot snapshot) => RangeFontExperiment.Enabled &&
-        !HasReportedFont(snapshot) && _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
-        snapshot.SelectionEnd >= 2 && snapshot.AutomationIdentity.Length > 0 &&
+        !_checkedReported && _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
+        snapshot.SelectionEnd >= (HasReportedFont(snapshot) ? 5 : 2) && snapshot.AutomationIdentity.Length > 0 &&
         !snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal);
 
     public EditorSnapshot Enrich(EditorSnapshot snapshot, TextPatternRange caret, int generation)
     {
-        if (!RangeFontExperiment.Enabled || HasReportedFont(snapshot)) return snapshot;
+        if (!RangeFontExperiment.Enabled) return snapshot;
+        bool reported = HasReportedFont(snapshot);
         // Retain the user's accepted omnibox fallback and exact native contract.
         if (snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal) || snapshot.AutomationIdentity.Length == 0) return snapshot;
         string context = $"{generation}:{snapshot.Foreground}:{snapshot.Editor}:{snapshot.AutomationIdentity}:{snapshot.Dpi}:" +
@@ -57,10 +59,12 @@ internal sealed class UiaRangeFont
         {
             _context = context; _revision = RangeFontExperiment.Revision;
             _attempts = 0; _stable = 0; _lastAttempt = 0;
+            _checkedReported = _correctedReported = false;
         }
         if (_stable > 0) return Apply(snapshot);
+        if (reported && _checkedReported) return snapshot;
         long now = Environment.TickCount64;
-        if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < 2)
+        if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < (reported ? 5 : 2))
             return snapshot;
         _lastAttempt = now;
         long started = Stopwatch.GetTimestamp();
@@ -70,7 +74,7 @@ internal sealed class UiaRangeFont
             // fallback and waiting for another temporal confirmation.
             _attempts++;
             var longer = Read(caret, Math.Min(8, snapshot.SelectionEnd));
-            if (longer == null || longer.Value.Text.Length < 2) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
+            if (longer == null || longer.Value.Text.Length < (reported ? 5 : 2)) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
             if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
             { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 6; return snapshot; }
             var shorter = Read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
@@ -78,8 +82,28 @@ internal sealed class UiaRangeFont
             double size = Estimate(longer.Value.Text, longer.Value.Bounds, shorter.Value.Text, shorter.Value.Bounds,
                 snapshot.Dpi, snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic);
             if (size == 0) { SetStatus("Границы диапазонов не подтверждают размер; сохранён fallback"); return snapshot; }
+            if (reported)
+            {
+                if (Math.Abs(size - snapshot.FontSizeDip) < snapshot.FontSizeDip * 0.10)
+                {
+                    _checkedReported = true;
+                    SetStatus($"reportedDip={snapshot.FontSizeDip:F2}; rangeDip={size:F2}; исходные метрики сохранены");
+                    return snapshot;
+                }
+                // Require an additional suffix before replacing complete attributes.
+                if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
+                { _attempts = 6; SetStatus("Проверка метрик медленная; исходный шрифт сохранён"); return snapshot; }
+                var middle = Read(caret, 3);
+                double check = middle == null ? 0 : Estimate(longer.Value.Text, longer.Value.Bounds,
+                    middle.Value.Text, middle.Value.Bounds, snapshot.Dpi, snapshot.FontFamilyName,
+                    snapshot.FontWeightValue, snapshot.FontItalic);
+                if (!ShouldCorrectReported(snapshot.FontSizeDip, size, check))
+                { SetStatus($"reportedDip={snapshot.FontSizeDip:F2}; rangeDip={size:F2}; checkDip={check:F2}; расхождение не подтверждено"); return snapshot; }
+                size = (size + check) / 2;
+                _correctedReported = true;
+            }
             _stable = size;
-            SetStatus($"rangeDip={size:F2}; согласованы 2 диапазона; family={(snapshot.FontFamilyName.Length == 0 ? "Segoe UI fallback" : snapshot.FontFamilyName)}");
+            SetStatus($"reportedDip={snapshot.FontSizeDip:F2}; rangeDip={size:F2}; согласованы {(reported ? 3 : 2)} диапазона; family={(snapshot.FontFamilyName.Length == 0 ? "Segoe UI fallback" : snapshot.FontFamilyName)}");
             return Apply(snapshot);
         }
         catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException or ElementNotAvailableException)
@@ -93,11 +117,20 @@ internal sealed class UiaRangeFont
         }
     }
 
+    internal static bool ShouldCorrectReported(double reported, double estimate, double check) =>
+        double.IsFinite(reported) && reported > 0 && double.IsFinite(estimate) && estimate is >= 8 and <= 96 &&
+        double.IsFinite(check) && check is >= 8 and <= 96 &&
+        Math.Abs(estimate - check) <= estimate * 0.05 &&
+        Math.Abs(estimate - reported) >= reported * 0.10 &&
+        Math.Abs(check - reported) >= reported * 0.10 &&
+        (estimate - reported) * (check - reported) > 0;
+
     private void SetStatus(string value) => Status = value;
     private EditorSnapshot Apply(EditorSnapshot snapshot) => snapshot with
     {
         FontSizeDip = _stable,
-        FontSource = "UIA range-width estimate" + (snapshot.FontFamilyName.Length == 0 ? " (family fallback)" : "")
+        FontSource = "UIA range-width estimate" + (_correctedReported ? $" (validated reportedDip={snapshot.FontSizeDip:F2})" : "") +
+            (snapshot.FontFamilyName.Length == 0 ? " (family fallback)" : "")
     };
 
     private static (string Text, Rect Bounds)? Read(TextPatternRange caret, int length)
