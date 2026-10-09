@@ -123,7 +123,7 @@ internal sealed class SessionDebugWindow : Window
             Foreground = Brushes.LightSteelBlue, Margin = new Thickness(0, 12, 0, 0), TextWrapping = TextWrapping.Wrap };
         Grid.SetRow(footer, 4); root.Children.Add(footer); Content = root;
         _refresh.Tick += (_, _) => Refresh();
-        IsVisibleChanged += (_, _) => { if (IsVisible) { Refresh(); _refresh.Start(); } else _refresh.Stop(); };
+        IsVisibleChanged += (_, _) => { PerformanceDiagnostics.SetDebugVisible(IsVisible); if (IsVisible) { Refresh(); _refresh.Start(); } else _refresh.Stop(); };
         Closing += (_, args) => { if (!_shutdown) { args.Cancel = true; Hide(); } };
     }
 
@@ -143,6 +143,7 @@ internal sealed class SessionDebugWindow : Window
     private void Refresh()
     {
         if (_pause.IsChecked == true) return;
+        using var measurement = PerformanceDiagnostics.Measure("debug-refresh");
         var frame = _capture();
         if (frame != _shown)
         {
