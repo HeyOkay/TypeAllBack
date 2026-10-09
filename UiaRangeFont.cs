@@ -26,12 +26,14 @@ internal sealed class UiaRangeFont
 {
     private string _context = "";
     private int _revision = -1, _attempts;
-    private long _lastAttempt;
     private double _stable, _lastMs;
     private bool _checkedReported, _correctedReported;
     public string Status { get; private set; } = "Оценка ещё не выполнялась";
     private string? _lastStatus;
     public event Action<string>? StatusChanged;
+
+    private readonly Func<TextPatternRange, int, (string Text, Rect Bounds)?> _read;
+    internal UiaRangeFont(Func<TextPatternRange, int, (string Text, Rect Bounds)?>? read = null) => _read = read ?? Read;
 
     // Reported attributes remain the baseline; long ranges may validate their size.
     internal static bool HasReportedFont(EditorSnapshot snapshot) =>
@@ -41,8 +43,8 @@ internal sealed class UiaRangeFont
         PreviewMetrics.HasReliableFormatting(snapshot.FontSource) &&
         !snapshot.FontSource.StartsWith("UIA range-width estimate", StringComparison.Ordinal);
 
-    // One early probe when the field first has two measurable characters;
-    // subsequent failed attempts retain the 500 ms cooldown and six-attempt cap.
+    // One attempt per field/focus/DPI/font context, including unsupported responses.
+    // Caret-height jitter cannot rearm a rejected measurement.
     internal bool NeedsInitialProbe(EditorSnapshot snapshot) => RangeFontExperiment.Enabled &&
         !_checkedReported && _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
         snapshot.SelectionEnd >= (HasReportedFont(snapshot) ? 5 : 2) && snapshot.AutomationIdentity.Length > 0 &&
@@ -58,30 +60,28 @@ internal sealed class UiaRangeFont
         // Retain the user's accepted omnibox fallback and exact native contract.
         if (snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal) || snapshot.AutomationIdentity.Length == 0) return snapshot;
         string context = $"{generation}:{snapshot.Foreground}:{snapshot.Editor}:{snapshot.AutomationIdentity}:{snapshot.Dpi}:" +
-            $"{snapshot.Caret.Bottom-snapshot.Caret.Top}:{snapshot.FontFamilyName}:{snapshot.FontWeightValue}:{snapshot.FontItalic}:{snapshot.FontSizeDip}:{fontChoice.Used}:{fontChoice.Reason}";
+            $"{snapshot.FontFamilyName}:{snapshot.FontWeightValue}:{snapshot.FontItalic}:{snapshot.FontSizeDip}:{fontChoice.Used}:{fontChoice.Reason}";
         if (context != _context || _revision != RangeFontExperiment.Revision)
         {
             _context = context; _revision = RangeFontExperiment.Revision;
-            _attempts = 0; _stable = 0; _lastAttempt = 0;
+            _attempts = 0; _stable = 0;
             _checkedReported = _correctedReported = false;
         }
         if (_stable > 0) return Apply(snapshot);
         if (reported && _checkedReported) return snapshot;
-        long now = Environment.TickCount64;
-        if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < (reported ? 5 : 2))
+        if (_attempts >= 1 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < (reported ? 5 : 2))
             return snapshot;
-        _lastAttempt = now;
         long started = Stopwatch.GetTimestamp();
         try
         {
             // Compare nested ranges in the same capture, rather than showing a
             // fallback and waiting for another temporal confirmation.
             _attempts++;
-            var longer = Read(caret, Math.Min(8, snapshot.SelectionEnd));
+            var longer = _read(caret, Math.Min(8, snapshot.SelectionEnd));
             if (longer == null || longer.Value.Text.Length < (reported ? 5 : 2)) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
             if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
-            { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 6; return snapshot; }
-            var shorter = Read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
+            { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 1; return snapshot; }
+            var shorter = _read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
             if (shorter == null) { SetStatus("Короткий контрольный диапазон недоступен"); return snapshot; }
             fontChoice = PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic, longer.Value.Text);
             double size = Estimate(longer.Value.Text, longer.Value.Bounds, shorter.Value.Text, shorter.Value.Bounds,
@@ -97,8 +97,8 @@ internal sealed class UiaRangeFont
                 }
                 // Require an additional suffix before replacing complete attributes.
                 if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
-                { _attempts = 6; SetStatus("Проверка метрик медленная; исходный шрифт сохранён"); return snapshot; }
-                var middle = Read(caret, 3);
+                { _attempts = 1; SetStatus("Проверка метрик медленная; исходный шрифт сохранён"); return snapshot; }
+                var middle = _read(caret, 3);
                 double check = middle == null ? 0 : Estimate(longer.Value.Text, longer.Value.Bounds,
                     middle.Value.Text, middle.Value.Bounds, snapshot.Dpi, fontChoice.Used,
                     snapshot.FontWeightValue, snapshot.FontItalic);
@@ -117,7 +117,7 @@ internal sealed class UiaRangeFont
         {
             _lastMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             PerformanceDiagnostics.Observe("range-font", _lastMs);
-            string report = $"поле={snapshot.Editor.ToInt64():X}; requestedFamily={fontChoice.Requested}; usedFamily={fontChoice.Used}; fallbackReason={fontChoice.Reason}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/6; cached={_stable > 0}";
+            string report = $"поле={snapshot.Editor.ToInt64():X}; requestedFamily={fontChoice.Requested}; usedFamily={fontChoice.Used}; fallbackReason={fontChoice.Reason}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/1; cached={_stable > 0}";
             if (_lastStatus != report) { _lastStatus = report; StatusChanged?.Invoke(report); }
         }
     }
