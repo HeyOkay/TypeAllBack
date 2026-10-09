@@ -714,7 +714,7 @@ var historyThread=new Thread(()=> {
 });
 historyThread.SetApartmentState(ApartmentState.STA);historyThread.Start();historyThread.Join();
 if(historyError!=null)throw historyError;
-Eq(AutoEnterOptions.Enabled,false,"automatic Enter correction is opt-in");
+Eq(AutoEnterOptions.Enabled,true,"automatic Enter correction defaults on");
 var enterGate=new EnterReservation();
 Eq(enterGate.Handle(0x0D,true,false,true,false),EnterDisposition.Native,"Enter without valid preview stays native");
 Eq(enterGate.Handle(0x0D,true,false,false,true),EnterDisposition.Native,"Shift or modified Enter stays native");
@@ -746,4 +746,21 @@ RangeFontExperiment.SetEnabled(false);
 Eq(experimentChanges,1,"unchanged experiment settings do not reset sessions");
 RangeFontExperiment.SetEnabled(true);
 Eq(RangeFontExperiment.Enabled,true,"experiment can be reenabled live");
+Eq(new TraySettings().AutoEnter,true,"new settings enable Enter correction");
+Eq(UpdateChecker.Https("http://example.com/feed",out _),false,"update transport requires HTTPS");
+Eq(UpdateChecker.Https("https://user:secret@example.com/feed",out _),false,"update URLs reject credentials");
+Eq(UpdateChecker.Parse("{\"version\":\"1.0.0\"}",new Version(1,0,0)).ReleasePage,null,"current version does not offer download");
+Eq(UpdateChecker.Parse("{\"version\":\"2.0.0\",\"releasePage\":\"https://example.com/releases\"}",new Version(1,0,0)).ReleasePage!.Scheme,"https","new version offers checked HTTPS page");
+bool rejectedPage=false;
+try { UpdateChecker.Parse("{\"version\":\"2.0.0\",\"releasePage\":\"file:///C:/bad.exe\"}",new Version(1,0,0)); }
+catch(System.IO.InvalidDataException){rejectedPage=true;}
+Eq(rejectedPage,true,"remote manifest cannot launch local file");
+using(var pausedEditor = new UiaTextEditor())
+{
+    pausedEditor.SetPaused(true);
+    Eq(pausedEditor.IsPaused,true,"worker can pause without permanent disposal");
+    Eq(pausedEditor.TryReadCached(out _),false,"paused worker cannot authorize input interception");
+    pausedEditor.SetPaused(false);
+    Eq(pausedEditor.IsPaused,false,"worker pause can be reversed");
+}
 Console.WriteLine($"PASS: {checks} regression checks");

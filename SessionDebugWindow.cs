@@ -41,7 +41,7 @@ internal sealed class SessionDebugWindow : Window
     {
         _diagnostics = diagnostics; _capture = capture;
         _historyRenderer = new IncrementalHistory(_history);
-        Title = "LayoutPreview — отладка сессии и правила";
+        Title = "TypeAllBack — отладка сессии и правила";
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(
             new Uri("pack://application:,,,/Assets/TypeAllBack.ico", UriKind.Absolute));
         Width = 750; Height = 820; MinWidth = 550; MinHeight = 580;
@@ -105,10 +105,13 @@ internal sealed class SessionDebugWindow : Window
         fontExperiment.Checked += (_, _) => RangeFontExperiment.SetEnabled(true);
         fontExperiment.Unchecked += (_, _) => RangeFontExperiment.SetEnabled(false);
         textPanel.Children.Add(fontExperiment);
-        var autoEnter = new CheckBox { Content = "Исправлять перед Enter (эксперимент)", IsChecked = AutoEnterOptions.Enabled,
-            Margin = new Thickness(0, 4, 0, 8), ToolTip = "По умолчанию выключено. Только при подтверждённой подсказке. Shift+Enter и другие сочетания — обычные. При неопределённом результате Enter отменяется. Режим для проверки ChatGPT/Discord; назначение Enter определяет само приложение." };
+        var autoEnter = new CheckBox { Content = "Исправлять перед Enter", IsChecked = AutoEnterOptions.Enabled,
+            Margin = new Thickness(0, 4, 0, 8), ToolTip = "По умолчанию включено. Только при подтверждённой подсказке. Shift+Enter и другие сочетания — обычные. При неопределённом результате Enter отменяется. Режим для проверки ChatGPT/Discord; назначение Enter определяет само приложение." };
         autoEnter.Checked += (_, _) => AutoEnterOptions.SetEnabled(true);
         autoEnter.Unchecked += (_, _) => AutoEnterOptions.SetEnabled(false);
+        void SyncAutoEnter(bool enabled) { autoEnter.IsChecked = enabled; }
+        AutoEnterOptions.Changed += SyncAutoEnter;
+        Closed += (_, _) => AutoEnterOptions.Changed -= SyncAutoEnter;
         textPanel.Children.Add(autoEnter);
         AddField(textPanel, "Подтверждено редактором", _confirmed);
         AddField(textPanel, "Ожидаемый текст после всех захваченных клавиш", _expected);

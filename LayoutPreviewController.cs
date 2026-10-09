@@ -184,8 +184,11 @@ public sealed class LayoutPreviewController : IDisposable
         Diagnostic("Автоисправление Enter", enabled ? "Включено для поддерживаемых полей; только при подтверждённой подсказке" : "Выключено");
     }
     private void OnPreviewThemeChanged(string theme) => Diagnostic("Оформление", theme);
-    public void Start()
+    private bool _enabled = true;
+    private int _hookRun;
+    public void Start(bool enabled = true)
     {
+        _enabled = enabled;
         Trace.Listeners.Add(_acceptDiagnostics);
         AutoEnterOptions.Changed += OnAutoEnterChanged;
         RangeFontExperiment.Changed += OnRangeFontChanged;
@@ -193,23 +196,52 @@ public sealed class LayoutPreviewController : IDisposable
         _preview.ThemeChanged += OnPreviewThemeChanged;
         _preview.FontMetricsChanged += OnPreviewFontMetricsChanged;
         Diagnostic("Оформление", _preview.ThemeDescription);
+        TextEditor.SetPaused(!_enabled);
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
         _preview.AcceptRequested += (_, _) => { _acceptSource = "Мышь"; AcceptPreview(); };
         _startRules.Changed += OnStartRuleChanged;
         _debugWindow = new SessionDebugWindow(_diagnostics, CaptureDiagnostics, _startRules);
-        if (!Environment.GetCommandLineArgs().Contains("--no-debug-window")) _debugWindow.Show();
+        if (Environment.GetCommandLineArgs().Contains("--debug-window") && !Environment.GetCommandLineArgs().Contains("--no-debug-window")) _debugWindow.Show();
         _watch.Tick += (_, _) => UpdatePreview();
         _deferredStartupWatch.Tick += (_, _) => TryAttachDeferredStartup();
+        if (_enabled) StartKeyboard();
+    }
+    private void StartKeyboard()
+    {
+        int run = ++_hookRun;
         _keyboard = new KeyboardHookPump(input => Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            if (_disposed) return;
+            if (_disposed || !_enabled || run != _hookRun) return;
             PerformanceDiagnostics.Observe("key-dispatch", Environment.TickCount64 - input.CapturedAt);
             PerformanceDiagnostics.Observe("hook-capture", input.HookCaptureMs);
             ProcessKey(input);
             _processedSequence = input.Sequence;
         }, DispatcherPriority.Input), _testInput);
         _keyboard.Start();
+    }
+    internal void ShowDebug() { _debugWindow?.Show(); _debugWindow?.Activate(); }
+    internal void SetEnabled(bool enabled)
+    {
+        if (_disposed || _enabled == enabled) return;
+        _enabled = enabled;
+        _acceptedInput.Disarm(); _acceptedEditor = null;
+        _controlDown = _altDown = _winDown = false;
+        Reset(enabled ? "Утилита включена" : "Утилита приостановлена");
+        if (enabled)
+        {
+            _rulesChangedSequence = -1;
+            TextEditor.SetPaused(false);
+            StartKeyboard();
+        }
+        else
+        {
+            ++_hookRun;
+            _keyboard?.CompleteEnter();
+            _keyboard?.Dispose(); _keyboard = null;
+            TextEditor.SetPaused(true); _watch.Stop();
+        }
+        Diagnostic("Работа утилиты", enabled ? "Включена" : "Приостановлена");
     }
     private IntPtr ProcessKey(CapturedKeyboardInput input)
     {
@@ -487,7 +519,7 @@ public sealed class LayoutPreviewController : IDisposable
     private void UpdatePreview()
     {
         using var measurement = PerformanceDiagnostics.Measure("preview-update");
-        if (_disposed || _accepting) return;
+        if (_disposed || !_enabled || _accepting) return;
         if (_controlDown || _altDown || _winDown)
         {
             _visible = false; _lastVerifiedRevision = -1;
@@ -815,7 +847,7 @@ public sealed class LayoutPreviewController : IDisposable
         bool forwardEnter = _forwardEnter; _forwardEnter = false;
         long reservedSequence = _enterSequence;
         long reservedEpoch = _enterEpoch;
-        if (_disposed || !_visible || _session == null || _editor == null || _session.Preview.Length == 0)
+        if (_disposed || !_enabled || !_visible || _session == null || _editor == null || _session.Preview.Length == 0)
         { _accepting = false; if (forwardEnter) { Diagnostic("Enter отменён", "Нет действующей подсказки"); _keyboard?.CompleteEnter(); } return; }
         if (_keyboard != null) _keyboard.AcceptContext = null;
         _acceptDiagnostics.Begin(_diagnostics.SessionId);

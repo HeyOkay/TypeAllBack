@@ -27,5 +27,7 @@
     <Compile Include="../EditorContextDiagnostics.cs" Link="EditorContextDiagnostics.cs" />
     <Compile Include="../PerformanceDiagnostics.cs" Link="PerformanceDiagnostics.cs" />
     <Compile Include="../ShellSearchResolver.cs" Link="ShellSearchResolver.cs" />
+    <Compile Include="../TraySettings.cs" Link="TraySettings.cs" />
+    <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
   </ItemGroup>
 </Project>

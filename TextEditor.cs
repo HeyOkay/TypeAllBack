@@ -6,6 +6,7 @@ internal static class TextEditor
     private static readonly UiaTextEditor Automation = new();
     public static string LastCaptureFailure => Automation.LastCaptureFailure;
     public static void Start() => Automation.Start();
+    internal static void SetPaused(bool paused) => Automation.SetPaused(paused);
     public static void Stop() => Automation.Dispose();
     public static event Action? SnapshotChanged { add => Automation.SnapshotChanged += value; remove => Automation.SnapshotChanged -= value; }
     public static void NotifyInput() => Automation.NotifyInput();

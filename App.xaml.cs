@@ -6,6 +6,8 @@ public partial class App : Application
 {
     private LayoutPreviewController? _controller;
     private Mutex? _instanceMarker;
+    private TrayHost? _tray;
+    private TraySettings? _settings;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -39,12 +41,26 @@ public partial class App : Application
             System.Diagnostics.Trace.AutoFlush = true;
         }
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        _settings = TraySettings.Load();
+        _settings.Save();
+        AutoEnterOptions.SetEnabled(_settings.AutoEnter);
+        AutoEnterOptions.Changed += SaveAutoEnter;
         _controller = new LayoutPreviewController();
-        _controller.Start();
+        _controller.Start(_settings.Enabled);
+        _tray = new TrayHost(_settings, _controller.SetEnabled, _controller.ShowDebug);
+    }
+
+    private void SaveAutoEnter(bool enabled)
+    {
+        if (_settings == null) return;
+        _settings.AutoEnter = enabled;
+        _settings.Save();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        AutoEnterOptions.Changed -= SaveAutoEnter;
+        _tray?.Dispose();
         _controller?.Dispose();
         _instanceMarker?.Dispose();
         _instanceMarker = null;

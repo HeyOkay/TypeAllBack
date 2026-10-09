@@ -4,7 +4,7 @@ namespace LayoutPreviewPrototype;
 
 internal static class AutoEnterOptions
 {
-    private static int _enabled;
+    private static int _enabled = 1;
     public static bool Enabled => Volatile.Read(ref _enabled) != 0;
     public static event Action<bool>? Changed;
     public static void SetEnabled(bool enabled)

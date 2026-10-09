@@ -19,7 +19,15 @@ internal sealed class UiaTextEditor : IDisposable
     private readonly ConcurrentQueue<Action> _commands = new();
     private readonly AutoResetEvent _wake = new(false);
     private EditorSnapshot? _snapshot;
-    private volatile bool _stopping;
+    private volatile bool _stopping, _paused;
+    internal bool IsPaused => _paused;
+    internal void SetPaused(bool paused)
+    {
+        _paused = paused;
+        Volatile.Write(ref _snapshot, null);
+        Interlocked.Increment(ref _focusGeneration);
+        _wake.Set();
+    }
     private Thread? _worker;
     private AutomationFocusChangedEventHandler? _focusChanged;
     private static string _lastRejectedContext = "";
@@ -68,6 +76,13 @@ internal sealed class UiaTextEditor : IDisposable
         int lastCaptureGeneration = -1;
         while (!_stopping)
         {
+            if (_paused)
+            {
+                Publish(null);
+                SetTextEvents(null);
+                _wake.WaitOne();
+                continue;
+            }
             while (_commands.TryDequeue(out var command)) command();
             int generation = Volatile.Read(ref _focusGeneration);
             long now = Environment.TickCount64;
@@ -79,6 +94,7 @@ internal sealed class UiaTextEditor : IDisposable
             Capture(out var snapshot, out _, out _, out _);
             double captureMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             PerformanceDiagnostics.Observe("capture", captureMs);
+            if (_paused || generation != Volatile.Read(ref _focusGeneration)) continue;
             Publish(snapshot);
             PerformanceDiagnostics.Flush();
             nextCaptureAt = Environment.TickCount64 + (captureMs >= 50 ? 80 : 35);
@@ -93,6 +109,7 @@ internal sealed class UiaTextEditor : IDisposable
     public bool TryReadCached(out EditorSnapshot snapshot)
     {
         snapshot = Volatile.Read(ref _snapshot)!;
+        if (_paused) return false;
         if (snapshot == null || Environment.TickCount64 - snapshot.CapturedAt > EditorPolling.MaximumSnapshotAgeMs ||
             Native.GetForegroundWindow() != snapshot.Foreground) return false;
         var gui = new Native.GUITHREADINFO { cbSize = Marshal.SizeOf<Native.GUITHREADINFO>() };
