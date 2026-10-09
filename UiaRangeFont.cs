@@ -32,16 +32,23 @@ internal sealed class UiaRangeFont
     private string? _lastStatus;
     public event Action<string>? StatusChanged;
 
+    // Explicit font attributes take priority over an approximation based on widths.
+    internal static bool HasReportedFont(EditorSnapshot snapshot) =>
+        double.IsFinite(snapshot.FontSizeDip) && snapshot.FontSizeDip is > 0 and <= 256 &&
+        !string.IsNullOrWhiteSpace(snapshot.FontFamilyName) &&
+        PreviewMetrics.HasReliableFormatting(snapshot.FontSource) &&
+        !snapshot.FontSource.StartsWith("UIA range-width estimate", StringComparison.Ordinal);
+
     // One early probe when the field first has two measurable characters;
     // subsequent failed attempts retain the 500 ms cooldown and six-attempt cap.
     internal bool NeedsInitialProbe(EditorSnapshot snapshot) => RangeFontExperiment.Enabled &&
-        _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
+        !HasReportedFont(snapshot) && _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
         snapshot.SelectionEnd >= 2 && snapshot.AutomationIdentity.Length > 0 &&
         !snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal);
 
     public EditorSnapshot Enrich(EditorSnapshot snapshot, TextPatternRange caret, int generation)
     {
-        if (!RangeFontExperiment.Enabled) return snapshot;
+        if (!RangeFontExperiment.Enabled || HasReportedFont(snapshot)) return snapshot;
         // Retain the user's accepted omnibox fallback and exact native contract.
         if (snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal) || snapshot.AutomationIdentity.Length == 0) return snapshot;
         string context = $"{generation}:{snapshot.Foreground}:{snapshot.Editor}:{snapshot.AutomationIdentity}:{snapshot.Dpi}:" +

@@ -468,7 +468,7 @@ internal sealed class UiaTextEditor : IDisposable
                 var styled = context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
                     FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = ReadUiaFontSource(focused, editableElement) };
                 return _rangeFont.Enrich(styled, selectedRange, Volatile.Read(ref _focusGeneration));
-            }, _rangeFont.NeedsInitialProbe(context with { FontSource = _formattingSnapshot?.FontSource ?? "" }));
+            }, _rangeFont.NeedsInitialProbe(_formattingSnapshot == null ? context : CopyFormatting(context, _formattingSnapshot)));
             return true;
         }
         catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or System.ComponentModel.Win32Exception or ElementNotAvailableException)

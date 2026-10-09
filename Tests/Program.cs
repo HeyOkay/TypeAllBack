@@ -598,11 +598,20 @@ foreach (uint dpi in new uint[] {96,120,144,192})
         "two-character bootstrap estimates size from two agreeing ranges");
 }
 var bootstrap=new UiaRangeFont();
-var bootstrapSnapshot=nativeForGeometry with { AutomationIdentity="test", FontSource="UIA character", SelectionStart=2, SelectionEnd=2 };
+var bootstrapSnapshot=nativeForGeometry with { AutomationIdentity="test", FontSource="UIA character", FontSizeDip=0, FontFamilyName="", SelectionStart=2, SelectionEnd=2 };
 Eq(bootstrap.NeedsInitialProbe(bootstrapSnapshot),true,"two characters trigger a worker bootstrap without the formatting timer");
 Eq(bootstrap.NeedsInitialProbe(bootstrapSnapshot with {SelectionStart=1, SelectionEnd=1}),false,"one character cannot spend a range attempt");
 Eq(bootstrap.NeedsInitialProbe(bootstrapSnapshot with {FontSource="UIA omnibox"}),false,"accepted omnibox formatting has no bootstrap probe");
 Eq(bootstrap.NeedsInitialProbe(bootstrapSnapshot with {SelectionStart=0}),false,"selected text does not trigger bootstrap measurement");
+var reportedFont=bootstrapSnapshot with {FontSizeDip=16,FontFamilyName="Arial"};
+Eq(UiaRangeFont.HasReportedFont(reportedFont),true,"complete UIA font attributes are authoritative");
+Eq(bootstrap.NeedsInitialProbe(reportedFont),false,"known UIA font avoids extra bootstrap queries");
+Eq(bootstrap.Enrich(reportedFont,null!,0),reportedFont,"range estimator cannot override complete font metadata or query the range");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontSizeDip=0}),false,"missing size permits range fallback");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontFamilyName=""}),false,"missing family marks approximate formatting");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontSizeDip=double.NaN}),false,"invalid size is not authoritative");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontSource="UIA range-width estimate"}),false,"an estimate cannot masquerade as real attributes");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontSource="UIA omnibox"}),false,"omnibox retains its existing special metric limits");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);
