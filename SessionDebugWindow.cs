@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -19,9 +19,15 @@ internal sealed class SessionDebugWindow : Window
     private readonly TextBox _expected = TextField();
     private readonly TextBox _replacement = TextField();
     private readonly TextBox _lastSession = TextField();
-    private readonly ListBox _history = new() { FontFamily = new FontFamily("Consolas"), FontSize = 11,
+    private readonly RichTextBox _history = new()
+    {
+        IsReadOnly = true, IsReadOnlyCaretVisible = true,
+        FontFamily = new FontFamily("Consolas"), FontSize = 11,
         Background = new SolidColorBrush(Color.FromRgb(22, 25, 31)), Foreground = Brushes.Gainsboro,
-        BorderThickness = new Thickness(0) };
+        BorderThickness = new Thickness(0), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        Document = new FlowDocument { PagePadding = new Thickness(8) },
+        ToolTip = "Выделение мышью → Ctrl+C. Ctrl+A → выбрать весь журнал. Пока журнал в фокусе, его обновление приостановлено."
+    };
     private readonly CheckBox _follow = new() { Content = "Следить за событиями", IsChecked = true };
     private readonly CheckBox _pause = new() { Content = "Пауза просмотра" };
     private SessionDiagnosticFrame? _shown;
@@ -94,7 +100,7 @@ internal sealed class SessionDebugWindow : Window
         var events = new Grid();
         events.RowDefinitions.Add(new() { Height = GridLength.Auto });
         events.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        events.Children.Add(new TextBlock { Text = "События и причины · последние 200", FontWeight = FontWeights.SemiBold,
+        events.Children.Add(new TextBlock { Text = "События и причины · последние 200 · выделение → Ctrl+C", FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 6) });
         Grid.SetRow(_history, 1); events.Children.Add(_history); Grid.SetRow(events, 3); root.Children.Add(events);
         var footer = new TextBlock { Text = "Правила начала доступны в отдельном списке выше. Лимит 10 слов — следующий этап.\n" +
@@ -135,38 +141,35 @@ internal sealed class SessionDebugWindow : Window
         string boundaries = $"Начало: {_diagnostics.StartReason}\nПоследнее окончание: {_diagnostics.LastEndReason}";
         if (_shownBoundaries != boundaries) { _shownBoundaries = boundaries; _boundaries.Text = boundaries; }
         SetText(_lastSession, _diagnostics.LastSession?.Expected ?? "");
-        if (_historyRevision == _diagnostics.Revision) return;
+        // Rebuilding the document while the user selects text would erase selection.
+        // Keep the visible log stable until focus returns to the editor/another control.
+        if (_historyRevision == _diagnostics.Revision || _history.IsKeyboardFocusWithin || _history.IsMouseCaptureWithin) return;
         _historyRevision = _diagnostics.Revision;
-        var selected = _history.SelectedItem;
-        var events = _diagnostics.Events.ToArray();
-        SetHistoryColors(events);
-        _history.ItemsSource = events;
-        if (selected != null) _history.SelectedItem = selected;
-        if (_follow.IsChecked == true && _history.Items.Count > 0) _history.ScrollIntoView(_history.Items[^1]);
+        RenderHistory(_diagnostics.Events.ToArray());
     }
 
-    private void SetHistoryColors(SessionDiagnosticEvent[] events)
+    private void RenderHistory(SessionDiagnosticEvent[] events)
     {
-        // Color exactly the most recent retained start and end independently.
-        // Replacing the style also removes highlighting from their predecessors.
-        var style = new Style(typeof(ListBoxItem));
-        style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Gainsboro));
-        var latestStart = events.LastOrDefault(entry => entry.Kind == "Начало");
-        var latestEnd = events.LastOrDefault(entry => entry.Kind == "Окончание");
-        void Highlight(SessionDiagnosticEvent? entry, Brush color)
+        // Starting a new session retires both highlights from the previous one.
+        var current = events.Where(entry => entry.SessionId == _diagnostics.SessionId).ToArray();
+        var latestStart = current.LastOrDefault(entry => entry.Kind == "Начало");
+        var latestEnd = current.LastOrDefault(entry => entry.Kind == "Окончание");
+        double scrollOffset = _history.VerticalOffset;
+        _history.BeginChange();
+        try
         {
-            if (entry == null) return;
-            var trigger = new DataTrigger
+            _history.Document.Blocks.Clear();
+            foreach (var entry in events)
             {
-                Binding = new Binding(nameof(SessionDiagnosticEvent.Number)),
-                Value = entry.Number
-            };
-            trigger.Setters.Add(new Setter(Control.ForegroundProperty, color));
-            style.Triggers.Add(trigger);
+                Brush color = entry == latestStart ? Brushes.Lime :
+                    entry == latestEnd ? new SolidColorBrush(Color.FromRgb(255, 64, 64)) : Brushes.Gainsboro;
+                _history.Document.Blocks.Add(new Paragraph(new Run(entry.ToString()) { Foreground = color })
+                    { Margin = new Thickness(0, 0, 0, 3) });
+            }
         }
-        Highlight(latestStart, Brushes.Lime);
-        Highlight(latestEnd, new SolidColorBrush(Color.FromRgb(255, 64, 64)));
-        _history.ItemContainerStyle = style;
+        finally { _history.EndChange(); }
+        if (_follow.IsChecked == true) _history.ScrollToEnd();
+        else _history.ScrollToVerticalOffset(scrollOffset);
     }
 
     private static void SetText(TextBox field, string text) { if (field.Text != text) field.Text = text; }

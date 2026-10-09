@@ -1,5 +1,13 @@
 # Decisions retained from user feedback
 
+- 2026-10-10, updated debug log requirement: a new session resets BOTH preceding
+  boundary highlights. Green/red now apply only to the latest start/end with the
+  current session ID. Replaced ListBox with readonly RichTextBox so mouse selection,
+  Ctrl+C and Ctrl+A work across event lines. Freeze log rendering while it has focus
+  or mouse capture to preserve selection; session processing remains live. This
+  supersedes the earlier independent-last-event coloring rule.
+
+
 - 2026-10-10: debug event log colors only the latest retained actual session start
   bright green and the latest retained actual session end bright red, independently.
   Earlier events revert to normal text. "Startup refined" and other diagnostics are
