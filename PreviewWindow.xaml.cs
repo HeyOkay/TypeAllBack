@@ -146,7 +146,7 @@ public partial class PreviewWindow : Window
         Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, windowLeftPx, windowTopPx, 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
         string fontDiagnostic = $"source={fontSource} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
-        if (fontDiagnostic != _lastFontDiagnostic)
+        if (animateFirstAppearance || fontDiagnostic != _lastFontDiagnostic)
         {
             Trace.WriteLine("Font metrics: " + fontDiagnostic);
             FontMetricsChanged?.Invoke(fontDiagnostic);

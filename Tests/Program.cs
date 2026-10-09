@@ -554,4 +554,8 @@ foreach (uint dpi in new uint[] { 96, 144, 192 })
         "production omnibox path limits inflated attributes at multiple DPI scales");
 Eq(PreviewMetrics.ResolveFontSize(12, 20, 96, 15, true, PreviewMetrics.HasReliableFormatting("UIA omnibox")), 12.0,
     "omnibox metadata smaller than the limit is never enlarged");
+Eq(PreviewMetrics.HasReliableFormatting("UIA omnibox; focusedClass=OmniboxViewViews"), false,
+    "diagnostic metadata cannot disable the omnibox font bound");
+Eq(PreviewMetrics.HasReliableFormatting("UIA character; focusedClass=Textfield"), true,
+    "metadata reporting preserves other fields' existing font treatment");
 Console.WriteLine($"PASS: {checks} regression checks");

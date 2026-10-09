@@ -1,5 +1,14 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user clarified the input-only filter is already off but Chrome shows
+  no font metrics row while ChatGPT does. Renderer had deduplicated font metrics
+  across sessions globally, so a missing row did not prove missing provider data.
+  Publish metrics at each session's first preview even when identical, and include
+  focused/editable UIA class/accelerator metadata (never names or field values).
+  Read optional metadata independently so one unavailable attribute cannot hide
+  an already-known omnibox class or invalidate readable font metadata.
+
+
 - 2026-10-10: user confirmed oversized preview font persists in Chrome's address
   bar. The earlier glyph-height protection was tested with reliableFormatting=false,
   but production passed true for any nonempty UIA FontSource, bypassing that limit.

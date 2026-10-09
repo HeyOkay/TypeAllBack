@@ -4,7 +4,7 @@ internal static class PreviewMetrics
 {
     // Omnibox attributes may be inflated; do not let "metadata present" bypass
     // the physical-glyph limit. Native and other glyph-local formatting stay exact.
-    public static bool HasReliableFormatting(string source) => source.Length > 0 && source != "UIA omnibox";
+    public static bool HasReliableFormatting(string source) => source.Length > 0 && !source.StartsWith("UIA omnibox", StringComparison.Ordinal);
     public static double ResolveFontSize(double reportedSizeDip, int caretHeightPixels, uint dpi,
         double previousSizeDip, bool firstAppearance, bool reliableFormatting = false)
     {

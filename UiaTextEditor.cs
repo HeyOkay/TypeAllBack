@@ -663,13 +663,19 @@ internal sealed class UiaTextEditor : IDisposable
 
     private static string ReadUiaFontSource(AutomationElement focused, AutomationElement editable)
     {
-        try
+        // Optional metadata failures cannot suppress a known class or readable font.
+        static string Read(Func<string> get)
         {
-            if (IsOmniboxFormatting(focused.Current.ClassName, focused.Current.AcceleratorKey) ||
-                IsOmniboxFormatting(editable.Current.ClassName, editable.Current.AcceleratorKey)) return "UIA omnibox";
+            try { string value = get(); return value.Length <= 128 ? value : value[..128]; }
+            catch (Exception error) when (error is InvalidOperationException or COMException or ElementNotAvailableException) { return ""; }
         }
-        catch (Exception error) when (error is InvalidOperationException or COMException or ElementNotAvailableException) { }
-        return "UIA character";
+        string focusedClass = Read(() => focused.Current.ClassName);
+        string focusedShortcut = Read(() => focused.Current.AcceleratorKey);
+        string editableClass = Read(() => editable.Current.ClassName);
+        string editableShortcut = Read(() => editable.Current.AcceleratorKey);
+        bool omnibox = IsOmniboxFormatting(focusedClass, focusedShortcut) || IsOmniboxFormatting(editableClass, editableShortcut);
+        return (omnibox ? "UIA omnibox" : "UIA character") +
+            $"; focusedClass={focusedClass}; focusedShortcut={focusedShortcut}; editableClass={editableClass}; editableShortcut={editableShortcut}";
     }
 
     private static string ReadFontFamilyName(TextPatternRange range)
