@@ -9,6 +9,9 @@ namespace LayoutPreviewPrototype;
 internal sealed class UiaTextEditor : IDisposable
 {
     private const int MaximumText = 65536;
+    private readonly UiaRangeFont _rangeFont = new();
+    private int _rangeExperimentRevision = -1;
+    public UiaTextEditor() { _rangeFont.StatusChanged += RangeFontExperiment.Report; }
     private string _nativeCaptureFailure = "Native-снимок недоступен";
     private string _lastCaptureFailure = "Снимок ещё не получен";
     public string LastCaptureFailure => Volatile.Read(ref _lastCaptureFailure);
@@ -130,6 +133,8 @@ internal sealed class UiaTextEditor : IDisposable
     private EditorSnapshot WithFormatting(EditorSnapshot context, bool presentation, Func<EditorSnapshot> read)
     {
         int generation = Volatile.Read(ref _focusGeneration);
+        if (_rangeExperimentRevision != RangeFontExperiment.Revision)
+        { _rangeExperimentRevision = RangeFontExperiment.Revision; _formattingSnapshot = null; _formattingAt = 0; }
         bool sameContext = _formattingSnapshot != null && _formattingGeneration == generation &&
             TextEditor.SameEditor(context, _formattingSnapshot) && context.Dpi == _formattingSnapshot.Dpi;
         if (!sameContext) _formattingSnapshot = null;
@@ -456,8 +461,9 @@ internal sealed class UiaTextEditor : IDisposable
             snapshot = WithFormatting(context, presentation, () =>
             {
                 var formatting = GetFormattingRange(selectedRange);
-                return context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
+                var styled = context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
                     FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = ReadUiaFontSource(focused, editableElement) };
+                return _rangeFont.Enrich(styled, selectedRange, Volatile.Read(ref _focusGeneration));
             });
             return true;
         }

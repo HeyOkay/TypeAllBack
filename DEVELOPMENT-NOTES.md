@@ -1,5 +1,20 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user authorized the UIA range-width font experiment after rollback.
+  No pixels, adaptive colors or browser extension. Compare two short source-text
+  ranges (up to 8 and 2 characters) against WPF widths with source DPI; reject
+  identical full-field rectangles, inconsistent endpoints/lines or inconsistent
+  estimates. Require two estimates within 8 percent before applying. Cache by
+  editor/focus/DPI/line-height/font signature; at most 6 attempts/context and 2/sec
+  in the existing MTA formatting worker. A slow first range stops further probing;
+  individual COM calls still cannot be forcibly timed out. Accepted omnibox 14-DIP
+  fallback and native HFONT path stay unchanged. Debug has a live experiment toggle
+  (setting changes end current session), rangeDip/attemptMs/cache status and the
+  existing font metrics. Duration is wall time, not measured CPU consumption.
+  Missing font family remains an explicitly labelled approximation. User runtime
+  tests/CPU comparison remain pending; do not claim total Chrome/utility overhead.
+
+
 - 2026-10-10: user explicitly requested rollback of the complete local-pixel/field
   appearance version and postponed adaptive field backgrounds. Reverted b8ce832;
   retain the accepted Windows-theme palettes and 14-DIP omnibox fallback. Do not

@@ -1,4 +1,4 @@
-using LayoutPreviewPrototype;
+﻿using LayoutPreviewPrototype;
 using System.Runtime.InteropServices;
 using System.Text;
 if (args.Contains("--shell-discovery-smoke"))
@@ -570,4 +570,31 @@ Eq(PreviewMetrics.ResolveFontSize(12, 30, 120, 19.2, true, false, missingOmnibox
     "available smaller font metadata takes precedence over omnibox fallback");
 Eq(PreviewMetrics.ResolveFontSize(0, 22, 120, 14.666666666666666, false, true, "UIA character"), 14.666666666666666,
     "missing native or other UIA metadata still preserves the established size");
+foreach (uint dpi in new uint[] { 96, 120, 144, 192 })
+{
+    const string longText="ghbdtn", shortText="tn";
+    double scale=dpi/96.0;
+    double longWidth=UiaRangeFont.Width(longText,"Segoe UI",400,false,14)*scale;
+    double shortWidth=UiaRangeFont.Width(shortText,"Segoe UI",400,false,14)*scale;
+    var longBounds=new System.Windows.Rect(100,100,longWidth,24*scale);
+    var shortBounds=new System.Windows.Rect(100+longWidth-shortWidth,100,shortWidth,24*scale);
+    Eq(Math.Abs(UiaRangeFont.Estimate(longText,longBounds,shortText,shortBounds,dpi,"Segoe UI",400,false)-14)<0.01,true,
+        "range-width estimator returns logical size at multiple DPI scales");
+    Eq(UiaRangeFont.Estimate(longText,longBounds,shortText,longBounds,dpi,"Segoe UI",400,false),0.0,
+        "a provider returning the whole field for both ranges is rejected");
+    Eq(UiaRangeFont.Estimate(longText,longBounds,shortText,shortBounds with { Y=200 },dpi,"Segoe UI",400,false),0.0,
+        "ranges on different lines cannot authorize a font estimate");
+}
+Eq(UiaRangeFont.Estimate("hello",new System.Windows.Rect(0,0,40,double.NaN),"lo",new System.Windows.Rect(28,0,12,20),96,"Segoe UI",400,false),0.0,
+    "nonfinite provider geometry is rejected");
+Eq(UiaRangeFont.Estimate("hello",System.Windows.Rect.Empty,"lo",new System.Windows.Rect(28,0,12,20),96,"Segoe UI",400,false),0.0,
+    "empty provider geometry is rejected");
+int experimentChanges=0;
+RangeFontExperiment.Changed += _ => experimentChanges++;
+RangeFontExperiment.SetEnabled(false);
+Eq(RangeFontExperiment.Enabled,false,"experiment can be disabled live");
+RangeFontExperiment.SetEnabled(false);
+Eq(experimentChanges,1,"unchanged experiment settings do not reset sessions");
+RangeFontExperiment.SetEnabled(true);
+Eq(RangeFontExperiment.Enabled,true,"experiment can be reenabled live");
 Console.WriteLine($"PASS: {checks} regression checks");

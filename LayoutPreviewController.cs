@@ -159,10 +159,26 @@ public sealed class LayoutPreviewController : IDisposable
         }, DispatcherPriority.Background);
     }
     private void OnPreviewFontMetricsChanged(string metrics) => Diagnostic("Шрифт подсказки", metrics);
+    private void OnRangeFontChanged(bool enabled)
+    {
+        _rulesChangedSequence = _keyboard?.LastSequence ?? -1;
+        Diagnostic("Оценка шрифта", enabled ? "Эксперимент включён" : "Эксперимент выключен");
+        Reset("Изменён режим оценки размера шрифта");
+        _acceptedInput.Disarm(); _acceptedEditor = null;
+        _controlDown = _altDown = _winDown = false;
+    }
+    private void OnRangeFontDiagnostic(string message)
+    {
+        if (_disposed) return;
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        { if (!_disposed) Diagnostic("Оценка шрифта", message); }, DispatcherPriority.Background);
+    }
     private void OnPreviewThemeChanged(string theme) => Diagnostic("Оформление", theme);
     public void Start()
     {
         Trace.Listeners.Add(_acceptDiagnostics);
+        RangeFontExperiment.Changed += OnRangeFontChanged;
+        RangeFontExperiment.Diagnostic += OnRangeFontDiagnostic;
         _preview.ThemeChanged += OnPreviewThemeChanged;
         _preview.FontMetricsChanged += OnPreviewFontMetricsChanged;
         Diagnostic("Оформление", _preview.ThemeDescription);
@@ -825,6 +841,8 @@ public sealed class LayoutPreviewController : IDisposable
     }
     public void Dispose()
     {
+        RangeFontExperiment.Changed -= OnRangeFontChanged;
+        RangeFontExperiment.Diagnostic -= OnRangeFontDiagnostic;
         _preview.ThemeChanged -= OnPreviewThemeChanged;
         _preview.FontMetricsChanged -= OnPreviewFontMetricsChanged;
         _startRules.Changed -= OnStartRuleChanged;

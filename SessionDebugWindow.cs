@@ -92,6 +92,15 @@ internal sealed class SessionDebugWindow : Window
             IsExpanded = true, Foreground = Brushes.Gainsboro, Margin = new Thickness(0, 0, 0, 8) };
         // Dedicated list above the text fields, with the whole area scrollable on small screens.
         textPanel.Children.Add(ruleList);
+        var fontExperiment = new CheckBox
+        {
+            Content = "Эксперимент: размер шрифта по UIA-диапазонам", IsChecked = RangeFontExperiment.Enabled,
+            Margin = new Thickness(0, 4, 0, 8),
+            ToolTip = "До 6 попыток на контекст, не чаще 2 раз/сек; после 2 согласованных оценок — кэш. Переключение завершает текущую сессию."
+        };
+        fontExperiment.Checked += (_, _) => RangeFontExperiment.SetEnabled(true);
+        fontExperiment.Unchecked += (_, _) => RangeFontExperiment.SetEnabled(false);
+        textPanel.Children.Add(fontExperiment);
         AddField(textPanel, "Подтверждено редактором", _confirmed);
         AddField(textPanel, "Ожидаемый текст после всех захваченных клавиш", _expected);
         AddField(textPanel, "Предполагаемая замена всей сессии", _replacement);
