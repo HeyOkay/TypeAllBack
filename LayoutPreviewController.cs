@@ -72,7 +72,7 @@ public sealed class LayoutPreviewController : IDisposable
         string context = _editor == null ? "Поле не подтверждено" :
             $"{_debugApplication} · {(_editor.AutomationIdentity.Length == 0 ? "Native" : "UI Automation")} · HWND {_editor.Editor.ToInt64():X} · поле {_editor.AutomationIdentity} · снимок {_editor.Revision}";
         return new(_diagnostics.SessionId, _accepting ? "Принятие" : _debugState, context,
-            $"{_session.SourceLayout} → {_session.TargetLayout}", expected.Start, expected.End,
+            $"{_session.SourceLayout} → {_session.TargetLayout}; текущий участок [{expected.ActiveStart}, {expected.End})", expected.Start, expected.End,
             SessionDiagnostics.CountWords(expected.Source), _debugConfirmed, expected.Source, expected.Replacement,
             _pendingInputs.Count, _visible, _processedSequence, _keyboard?.LastSequence ?? 0);
     }
@@ -246,7 +246,9 @@ public sealed class LayoutPreviewController : IDisposable
         if (vk is Native.VK_LWIN or Native.VK_RWIN)
         {
             _winDown = isDown;
-            if (isDown) Reset("Нажата клавиша Windows");
+            // Win+Space is a layout boundary within the same session.
+            // A real foreground change still ends it in the editor watcher.
+            if (isDown) { _visible = false; _lastVerifiedRevision = -1; if (_keyboard != null) _keyboard.AcceptContext = null; _preview.HidePreview(); }
             return Next();
         }
         if (isUp) return Next();
@@ -423,6 +425,7 @@ public sealed class LayoutPreviewController : IDisposable
             Trace.WriteLine($"Hook mismatch actualLength={snapshot.Text.Length} actualSelection={snapshot.SelectionStart},{snapshot.SelectionEnd} expectedEnd={_session.End}");
             Reset("Текст или каретка не совпали с ожидаемой сессией");
         }
+        UpdateLayoutBoundary(snapshot);
         if (vk == Native.VK_RIGHT)
         {
             if (input.AcceptedRight && !shift && _visible && _session?.Preview.Length > 0 && _targetLayout != IntPtr.Zero)
@@ -463,6 +466,13 @@ public sealed class LayoutPreviewController : IDisposable
     {
         using var measurement = PerformanceDiagnostics.Measure("preview-update");
         if (_disposed || _accepting) return;
+        if (_controlDown || _altDown || _winDown)
+        {
+            _visible = false; _lastVerifiedRevision = -1;
+            if (_keyboard != null) _keyboard.AcceptContext = null;
+            _preview.HidePreview();
+            return;
+        }
         if (_session == null)
         {
             if (!_acceptedInput.IsArmed || _acceptedEditor == null) { _watch.Stop(); return; }
@@ -502,6 +512,7 @@ public sealed class LayoutPreviewController : IDisposable
             Diagnostic("Контекст изменился", EditorContextDiagnostics.Describe(_editor, current));
             Reset("Смена окна или поля ввода: " + EditorContextDiagnostics.Changed(_editor, current)); return;
         }
+        if (_pendingInputs.Count == 0) UpdateLayoutBoundary(current);
         if (!recovered && _pendingInputs.Count == 0 && _lastVerifiedRevision == current.Revision && _lastVerifiedSource == _session.Source)
         { _editor = current with { Text = "" }; if (_visible) PublishAcceptContext(current); return; }
         TryConfirmUiaStartup(current);
@@ -536,6 +547,7 @@ public sealed class LayoutPreviewController : IDisposable
             if (Environment.TickCount64 >= _pendingUntil) { Trace.WriteLine($"Update mismatch length={current.Text.Length} selection={current.SelectionStart},{current.SelectionEnd} expectedEnd={_session.End}"); Reset("Документ не совпал с ожидаемым после ожидания ввода"); }
             return;
         }
+        UpdateLayoutBoundary(current);
         _pendingUntil = 0;
         _lastVerifiedRevision = current.Revision;
         _lastVerifiedSource = _session.Source;
@@ -575,6 +587,23 @@ public sealed class LayoutPreviewController : IDisposable
         PublishAcceptContext(current);
     }
 
+    private void UpdateLayoutBoundary(EditorSnapshot current)
+    {
+        if (_accepting || _session == null || _pendingInputs.Count > 0 || !TryLayout(current.Layout, out var layout)) return;
+        var before = _session.SourceLayout;
+        if (_session.ChangeLayout(layout)) LayoutBoundaryChanged(before);
+    }
+    private void LayoutBoundaryChanged(KeyboardLayout before)
+    {
+        if (_session == null) return;
+        _targetLayout = FindLayout(_session.TargetLayout);
+        _lastVerifiedRevision = -1;
+        _lastPreview = ""; _visible = false; _hasAppeared = false;
+        if (_keyboard != null) _keyboard.AcceptContext = null;
+        _preview.HidePreview();
+        _debugState = "Сессия сохранена; новый участок раскладки";
+        Diagnostic("Граница участка", $"{before} → {_session.SourceLayout}; начало текущего участка {_session.ActiveStart}; прежний текст сохраняется");
+    }
     private void PublishAcceptContext(EditorSnapshot current)
     {
         if (_keyboard == null) return;
@@ -621,7 +650,11 @@ public sealed class LayoutPreviewController : IDisposable
                 Trace.WriteLine($"UIA startup rebased with pending input chars={candidate.Source.Length}");
             }
             _uiaStartupUnconfirmed = false;
+            var previous = _session;
             _session = candidate;
+            if (previous.ActiveStart != candidate.ActiveStart || previous.SourceLayout != candidate.SourceLayout)
+                LayoutBoundaryChanged(previous.SourceLayout);
+            _targetLayout = FindLayout(candidate.TargetLayout);
             ConfirmDiagnosticText();
             _editor = snapshot with { Text = "" };
             _pendingInputs.Clear();
@@ -760,8 +793,8 @@ public sealed class LayoutPreviewController : IDisposable
         if (_disposed || !_visible || _session == null || _editor == null || _session.Preview.Length == 0) { _accepting = false; return; }
         if (_keyboard != null) _keyboard.AcceptContext = null;
         _acceptDiagnostics.Begin(_diagnostics.SessionId);
-        Diagnostic("Принятие", _acceptSource + ": проверка всей сессии");
-        _accepting = true; var session = _session; var editor = _editor; int generation = _generation;
+        Diagnostic("Принятие", _acceptSource + ": проверка сессии и текущего участка");
+        _accepting = true; var session = _session; var trackedSession = _session; var editor = _editor; int generation = _generation;
         bool replacementConfirmed = false;
         IntPtr originalLayout = IntPtr.Zero;
         try
@@ -779,7 +812,13 @@ public sealed class LayoutPreviewController : IDisposable
             if (_pendingInputs.Count > 0 || _session == null || _editor == null) { Diagnostic("Отказ", "Не подтверждены все клавиши сессии"); return; }
             session = _session; editor = _editor;
             if (!TextEditor.TryRead(out current) || !TextEditor.SameEditor(editor, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd)) { Diagnostic("Отказ", "Перед принятием не совпали поле, полный текст или каретка"); return; }
-            Diagnostic("Принятие", $"Проверен диапазон [{session.Start}, {session.End}), символов {session.Source.Length}");
+            trackedSession = session;
+            if (!TryLayout(current.Layout, out var acceptLayout) || acceptLayout != trackedSession.SourceLayout)
+            { Diagnostic("Отказ", "Раскладка изменилась после показа подсказки"); return; }
+            var active = trackedSession.CreateActiveReplacement(current.Text, current.SelectionStart, current.SelectionEnd);
+            if (active == null || active.Preview.Length == 0) { Diagnostic("Отказ", "Текущий участок не подтверждён"); return; }
+            session = active;
+            Diagnostic("Принятие", $"Проверен текущий участок [{session.Start}, {session.End}), символов {session.Source.Length}; предыдущие участки вне замены");
             originalLayout = current.Layout;
             if (!await TextEditor.TrySwitchLayoutAsync(editor, session, _targetLayout) || generation != _generation) { Diagnostic("Отказ", "Переключение раскладки не подтверждено или операция отменена"); Trace.WriteLine("Accept switch failed"); return; }
             Diagnostic("Принятие", "Целевая раскладка подтверждена; начинается проверенная замена");
@@ -806,14 +845,14 @@ public sealed class LayoutPreviewController : IDisposable
         finally
         {
             Trace.WriteLine("Accept finished");
-            bool retryable = !replacementConfirmed && generation == _generation && _session == session &&
+            bool retryable = !replacementConfirmed && generation == _generation && _session == trackedSession &&
                 TextEditor.TryRead(out var unchanged) && TextEditor.SameEditor(editor, unchanged) &&
                 session.Matches(unchanged.Text, unchanged.SelectionStart, unchanged.SelectionEnd);
             if (retryable && originalLayout != IntPtr.Zero)
                 await TextEditor.TrySwitchLayoutAsync(editor, session, originalLayout);
             _accepting = false;
             if (retryable && generation == _generation) { Diagnostic("Повтор доступен", "Исходные текст и каретка подтверждены; подсказка сохранена"); UpdatePreview(); }
-            else Reset(replacementConfirmed ? "Вся сессия принята" : "Принятие не подтверждено; сессия завершена");
+            else Reset(replacementConfirmed ? "Текущий участок принят" : "Принятие не подтверждено; сессия завершена");
         }
     }
     internal static bool TryLayout(IntPtr hkl, out KeyboardLayout layout)

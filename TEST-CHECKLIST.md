@@ -1,4 +1,4 @@
-# Первый тест — Notepad
+﻿# Первый тест — Notepad
 
 Перед тестом: Windows 11, установлены EN и RU раскладки. Запусти проект через F5 в VS Code, затем открой обычный Блокнот.
 
@@ -28,3 +28,16 @@
 - Frame + suggestion are fully dissolved at about 50% of the ~170 ms Accept movement.
 - Final accepted text appears around that midpoint, without a frame.
 - Preview text and border use the same neutral gray hue family.
+
+
+## Manual layout sections (2026-10-10)
+
+- Type `ghbdtn` in EN, manually switch to RU, then back to EN without typing.
+  Old hint clears, session ID stays the same, typing ` ghbdtn` creates a new section.
+  Right or mouse accepts only the latter: `ghbdtn привет`.
+- Repeat manual switches using Win+Space and the configured Alt+Shift/Ctrl+Shift.
+  No new session ID solely due to switching, prior text stays unchanged.
+- Delete the current section with Backspace and one character across its boundary.
+  Old hint must not reappear; subsequent input belongs to an empty new section.
+- Check both conversion directions and prefix `OLD ` in Notepad/ChatGPT/Discord/Chrome.
+- Automatic layout switching during accept must not emit manual section boundaries.

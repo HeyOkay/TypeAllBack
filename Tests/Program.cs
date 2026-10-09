@@ -92,10 +92,10 @@ Eq(session.Matches(document,0,document.Length),false,"selection cannot be accept
 Eq(session.MatchesDocument(document),true,"Ctrl+A selection preserves session document");
 Eq(session.Preview,"привет","space retains preview"); Eq(session.Replacement,"привет ","sentence replacement");
 Type("vbh",KeyboardLayout.Russian);
-Eq(session.Replacement,"привет мир","correct segment unchanged"); Eq(session.Segments.Count,2,"layout segments");
-Eq(session.Preview,"привет","earlier wrong segment remains actionable");
+Eq(session.Replacement,"ghbdtn vbh","only the current Russian section is converted"); Eq(session.Segments.Count,2,"layout segments");
+Eq(session.Preview,"","previous section no longer contributes a hint");
 Type(" pf,e[fk",KeyboardLayout.English);
-Eq(session.Preview,"забухал","latest word"); Eq(session.Replacement,"привет мир забухал","mixed segments");
+Eq(session.Preview,"забухал","latest word"); Eq(session.Replacement,"ghbdtn мир забухал","previous layout sections remain unchanged");
 Eq(session.Start,initial,"old text outside range");
 Eq(session.Matches(document,session.End-1,session.End-1),false,"moved caret invalid");
 Eq(session.Matches(document,session.Start,session.End),false,"selection invalid");
@@ -654,6 +654,39 @@ Eq(KeyboardHookPump.SnapshotForKey(0x08,ReadForBackspaceTest),null,"Backspace ne
 Eq(backspaceSnapshotReads,0,"Backspace bypasses all provider focus checks");
 Eq(KeyboardHookPump.SnapshotForKey(0x27,ReadForBackspaceTest),measurable,"Right retains checked acceptance snapshot");
 Eq(backspaceSnapshotReads,1,"only keys needing context invoke the snapshot reader");
+var sectionSession=new InputSession("OLD ",4,KeyboardLayout.English);
+string sectionDocument="OLD ";
+void SectionType(string keys,KeyboardLayout layout) {
+ foreach(char c in keys) {var k=Us(c);int end=sectionSession.End;sectionSession.Append(k,layout,sectionDocument);KeyboardConversion.TryConvert(k,layout,out char typed);sectionDocument=sectionDocument.Insert(end,typed.ToString());}
+}
+SectionType("ghbdtn",KeyboardLayout.English);
+Eq(sectionSession.Preview,"привет","initial section preview");
+sectionSession.ChangeLayout(KeyboardLayout.Russian);
+Eq(sectionSession.Preview,"","layout switch clears previous preview before new characters");
+Eq(sectionSession.Source,"ghbdtn","manual switch does not discard session text");
+sectionSession.ChangeLayout(KeyboardLayout.English);
+Eq(sectionSession.Preview,"","switching back cannot resurrect an earlier hint");
+SectionType(" ghbdtn",KeyboardLayout.English);
+Eq(sectionSession.Replacement,"ghbdtn привет","switch back preserves earlier same-layout section");
+var activeSection=sectionSession.CreateActiveReplacement(sectionDocument,sectionDocument.Length,sectionDocument.Length)!;
+Eq(activeSection.Start,10,"physical replacement begins at current section boundary");
+Eq(activeSection.Source," ghbdtn","replacement range excludes previous source");
+Eq(activeSection.Matches(sectionDocument,sectionDocument.Length,sectionDocument.Length),true,"transaction validates complete document including previous sections");
+Eq(activeSection.Matches("BAD "+sectionDocument[4..],sectionDocument.Length,sectionDocument.Length),false,"changed prefix fails transaction validation");
+Eq(sectionSession.CreateActiveReplacement(sectionDocument,0,0),null,"moved caret cannot create replacement transaction");
+for(int n=0;n<7;n++){sectionSession.Backspace(sectionDocument);sectionDocument=sectionDocument[..^1];}
+Eq(sectionSession.Preview,"","deleting current section cannot reactivate an old section");
+sectionSession.Backspace(sectionDocument);sectionDocument=sectionDocument[..^1];
+Eq(sectionSession.ActiveStart,sectionSession.End,"deletion across boundary leaves empty current section");
+Eq(sectionSession.Matches(sectionDocument,sectionDocument.Length,sectionDocument.Length),true,"cross-boundary Backspace retains checked document");
+Eq(sectionSession.Copy().ActiveStart,sectionSession.ActiveStart,"copy preserves current boundary");
+var pendingSections=new InputSession("",0,KeyboardLayout.Russian);
+pendingSections.ReplayPending(new[]{new QueuedInput((uint)'G',false,false,KeyboardLayout.Russian),new QueuedInput((uint)'H',false,false,KeyboardLayout.Russian),new QueuedInput((uint)'B',false,false,KeyboardLayout.Russian),new QueuedInput((uint)'G',false,false,KeyboardLayout.English),new QueuedInput((uint)'H',false,false,KeyboardLayout.English),new QueuedInput((uint)'B',false,false,KeyboardLayout.English)});
+Eq(pendingSections.Reconcile("приghb",6,6),true,"queued input across a switch confirms one complete session");
+Eq(pendingSections.SourceLayout,KeyboardLayout.English,"queued section uses latest captured layout");
+Eq(pendingSections.ActiveStart,3,"queued switch records exact section boundary");
+Eq(pendingSections.Replacement,"припри","queued replacement preserves the earlier section");
+Eq(pendingSections.CreateActiveReplacement("приghb",6,6)!.Source,"ghb","queued transaction selects only the current section");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);

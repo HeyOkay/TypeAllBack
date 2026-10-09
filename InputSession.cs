@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 namespace LayoutPreviewPrototype;
 internal readonly record struct QueuedInput(uint VirtualKey, bool Shift, bool CapsLock, KeyboardLayout Layout);
@@ -17,20 +17,23 @@ internal sealed class InputSession
     private readonly List<TypedSegment> _segments = [];
     public IReadOnlyList<TypedSegment> Segments => _segments;
     public int Start { get; }
-    public KeyboardLayout SourceLayout { get; }
+    public KeyboardLayout SourceLayout { get; private set; }
+    public int ActiveStart { get; private set; }
+    public string ActiveSource => Source[(ActiveStart - Start)..];
+    private string ActiveAlternative => string.Concat(_segments.Where(s => s.Start >= ActiveStart).Select(s => s.Alternative));
     public KeyboardLayout TargetLayout => SourceLayout == KeyboardLayout.English ? KeyboardLayout.Russian : KeyboardLayout.English;
     public string Source => string.Concat(_segments.Select(s => s.Source));
-    public string Replacement => string.Concat(_segments.Select(s => s.Layout == SourceLayout ? s.Alternative : s.Source));
+    public string Replacement => Source[..(ActiveStart - Start)] + ActiveAlternative;
     public int End => Start + Source.Length;
     private string _expectedFingerprint;
     private readonly string _baselineFingerprint;
     private readonly int _baselineLength;
     private string? _cachedPreview;
     public InputSession(string document, int caret, KeyboardLayout layout)
-    { Start = caret; SourceLayout = layout; _baselineFingerprint = Fingerprint(document); _baselineLength = document.Length; _expectedFingerprint = _baselineFingerprint; }
+    { Start = ActiveStart = caret; SourceLayout = layout; _baselineFingerprint = Fingerprint(document); _baselineLength = document.Length; _expectedFingerprint = _baselineFingerprint; }
     private InputSession(InputSession source)
     {
-        Start = source.Start; SourceLayout = source.SourceLayout;
+        Start = source.Start; ActiveStart = source.ActiveStart; SourceLayout = source.SourceLayout;
         _baselineFingerprint = source._baselineFingerprint; _baselineLength = source._baselineLength;
         _expectedFingerprint = source._expectedFingerprint;
         foreach (var segment in source._segments)
@@ -38,6 +41,19 @@ internal sealed class InputSession
             { Source = segment.Source, Alternative = segment.Alternative, IsValid = segment.IsValid });
     }
     public InputSession Copy() => new(this);
+    public bool ChangeLayout(KeyboardLayout layout)
+    {
+        if (layout == SourceLayout) return false;
+        SourceLayout = layout; ActiveStart = End; _cachedPreview = null;
+        return true;
+    }
+    public InputSession? CreateActiveReplacement(string document, int selectionStart, int selectionEnd)
+    {
+        if (ActiveSource.Length == 0 || !Matches(document, selectionStart, selectionEnd)) return null;
+        var active = new InputSession(document.Remove(ActiveStart, ActiveSource.Length), ActiveStart, SourceLayout);
+        active._segments.Add(new TypedSegment(SourceLayout, ActiveStart) {Source=ActiveSource, Alternative=ActiveAlternative});
+        return active.Reconcile(document, selectionStart, selectionEnd) ? active : null;
+    }
     public static InputSession FromSelectionReplacement(string document, int selectionStart, int selectionEnd,
         PhysicalKey key, KeyboardLayout layout)
     {
@@ -59,6 +75,7 @@ internal sealed class InputSession
         if (Start != _baselineLength || Source.Length == 0 || document != Source ||
             selectionStart != document.Length || selectionEnd != selectionStart) return false;
         var candidate = new InputSession("", 0, SourceLayout);
+        candidate.ActiveStart = ActiveStart - Start;
         foreach (var segment in _segments)
             candidate._segments.Add(new TypedSegment(segment.Layout, segment.Start - Start)
             { Source = segment.Source, Alternative = segment.Alternative, IsValid = segment.IsValid });
@@ -87,8 +104,9 @@ internal sealed class InputSession
         if (!KeyboardConversion.TryConvert(key, layout, out var source) ||
             !KeyboardConversion.TryConvert(key, layout == KeyboardLayout.English ? KeyboardLayout.Russian : KeyboardLayout.English, out var alternative))
             throw new ArgumentException("Unsupported physical key");
+        ChangeLayout(layout);
         int oldEnd = End;
-        if (_segments.Count == 0 || _segments[^1].Layout != layout) _segments.Add(new TypedSegment(layout, End));
+        if (_segments.Count == 0 || _segments[^1].Layout != layout || _segments[^1].Start < ActiveStart) _segments.Add(new TypedSegment(layout, End));
         _segments[^1].Source += source; _segments[^1].Alternative += alternative;
         _expectedFingerprint = Fingerprint(document.Insert(oldEnd, source.ToString()));
     }
@@ -96,9 +114,8 @@ internal sealed class InputSession
     {
         _cachedPreview = null;
         if (_segments.Count == 0) return false;
-        int oldEnd = End; var last = _segments[^1];
-        last.Source = last.Source[..^1]; last.Alternative = last.Alternative[..^1];
-        if (last.Source.Length == 0) _segments.RemoveAt(_segments.Count - 1);
+        int oldEnd = End;
+        RemoveLastTypedCharacter();
         _expectedFingerprint = Fingerprint(document.Remove(oldEnd - 1, 1)); return true;
     }
 
@@ -117,7 +134,8 @@ internal sealed class InputSession
             if (!KeyboardConversion.TryConvert(key, input.Layout, out var source) ||
                 !KeyboardConversion.TryConvert(key, input.Layout == KeyboardLayout.English ? KeyboardLayout.Russian : KeyboardLayout.English, out var alternative))
                 throw new ArgumentException("Pending input contains an unsupported key", nameof(inputs));
-            if (_segments.Count == 0 || _segments[^1].Layout != input.Layout)
+            ChangeLayout(input.Layout);
+            if (_segments.Count == 0 || _segments[^1].Layout != input.Layout || _segments[^1].Start < ActiveStart)
                 _segments.Add(new TypedSegment(input.Layout, End));
             _segments[^1].Source += source;
             _segments[^1].Alternative += alternative;
@@ -144,20 +162,18 @@ internal sealed class InputSession
         last.Source = last.Source[..^1];
         last.Alternative = last.Alternative[..^1];
         if (last.Source.Length == 0) _segments.RemoveAt(_segments.Count - 1);
+        ActiveStart = Math.Min(ActiveStart, End);
     }
     public string Preview => _cachedPreview ??= CalculatePreview();
     private string CalculatePreview()
     {
-            var segment = _segments.LastOrDefault(s => s.Layout == SourceLayout && s.Alternative.Any(char.IsLetter));
-            if (segment == null) return "";
-            // Punctuation is already converted. Only whitespace separates tokens.
-            var value = segment.Alternative.TrimEnd(); int i = value.Length - 1;
-            while (i >= 0 && !char.IsWhiteSpace(value[i])) i--;
-            var word = value[(i + 1)..];
-            var sourceSessionText = string.Join(" ", _segments.Where(s => s.Layout == SourceLayout).Select(s => s.Source));
-            var alternativeSessionText = string.Join(" ", _segments.Where(s => s.Layout == SourceLayout).Select(s => s.Alternative));
-            return word.Any(char.IsLetter) && Replacement != Source &&
-                LanguagePlausibility.IsClearlyMorePlausible(sourceSessionText, alternativeSessionText, SourceLayout) ? word : "";
+        string alternative = ActiveAlternative;
+        if (alternative.Length == 0) return "";
+        var value = alternative.TrimEnd(); int i = value.Length - 1;
+        while (i >= 0 && !char.IsWhiteSpace(value[i])) i--;
+        var word = value[(i + 1)..];
+        return word.Any(char.IsLetter) && alternative != ActiveSource &&
+            LanguagePlausibility.IsClearlyMorePlausible(ActiveSource, alternative, SourceLayout) ? word : "";
     }
     private static string Fingerprint(string value) => Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(value)));
 }
