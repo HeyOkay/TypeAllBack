@@ -6,6 +6,68 @@ namespace LayoutPreviewPrototype;
 public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
+    private readonly SessionDiagnostics _diagnostics = new();
+    private readonly AcceptDiagnosticListener _acceptDiagnostics = new();
+    private SessionDebugWindow? _debugWindow;
+    private string _debugConfirmed = "";
+    private string _debugState = "Ожидание подтверждения";
+    private string _acceptSource = "Мышь";
+    private string _debugApplication = "";
+
+    internal SessionDiagnosticFrame? CaptureDiagnostics()
+    {
+        DrainAcceptanceDiagnostics();
+        if (_session == null)
+        {
+            if (_deferredStartupInputs.Count == 0) return null;
+            var waiting = new InputSession("", 0, _deferredStartupInputs[0].Layout);
+            waiting.ReplayPending(_deferredStartupInputs);
+            return new(_diagnostics.SessionId, "Ожидание первого снимка поля", "Поле ещё не подтверждено",
+                $"{waiting.SourceLayout} → {waiting.TargetLayout}", 0, waiting.End,
+                SessionDiagnostics.CountWords(waiting.Source), "", waiting.Source, waiting.Replacement,
+                _deferredStartupInputs.Count, false, _processedSequence, _keyboard?.LastSequence ?? 0);
+        }
+        var expected = _session;
+        if (_pendingInputs.Count > 0) { expected = _session.Copy(); expected.ReplayPending(_pendingInputs); }
+        string context = _editor == null ? "Поле не подтверждено" :
+            $"{_debugApplication} · {(_editor.AutomationIdentity.Length == 0 ? "Native" : "UI Automation")} · HWND {_editor.Editor.ToInt64():X} · поле {_editor.AutomationIdentity} · снимок {_editor.Revision}";
+        return new(_diagnostics.SessionId, _accepting ? "Принятие" : _debugState, context,
+            $"{_session.SourceLayout} → {_session.TargetLayout}", expected.Start, expected.End,
+            SessionDiagnostics.CountWords(expected.Source), _debugConfirmed, expected.Source, expected.Replacement,
+            _pendingInputs.Count, _visible, _processedSequence, _keyboard?.LastSequence ?? 0);
+    }
+
+    private void BeginDiagnosticSession(string reason, int offset)
+    {
+        _diagnostics.End("Новая сессия заменила предыдущую: " + reason, CaptureDiagnostics());
+        _debugConfirmed = ""; _debugState = "Ожидание подтверждения";
+        _diagnostics.Start(reason, offset);
+        _debugApplication = "Неизвестное приложение";
+        try
+        {
+            Native.GetWindowThreadProcessId(Native.GetForegroundWindow(), out uint processId);
+            using var process = Process.GetProcessById((int)processId);
+            _debugApplication = process.ProcessName;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+
+    }
+
+    private void DrainAcceptanceDiagnostics()
+    {
+        foreach (var message in _acceptDiagnostics.Drain())
+            _diagnostics.Event("Проверка замены", message.Detail, message.Time, message.SessionId);
+    }
+    private void Diagnostic(string kind, string detail)
+    {
+        DrainAcceptanceDiagnostics();
+        _diagnostics.Event(kind, detail);
+    }
+    private void ConfirmDiagnosticText()
+    {
+        _debugConfirmed = _session?.Source ?? "";
+        _debugState = "Текст подтверждён";
+    }
     private readonly AcceptedInputGuard _acceptedInput = new();
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly bool _testInput = Environment.GetCommandLineArgs().Contains("--test-input");
@@ -56,9 +118,12 @@ public sealed class LayoutPreviewController : IDisposable
     }
     public void Start()
     {
+        Trace.Listeners.Add(_acceptDiagnostics);
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
-        _preview.AcceptRequested += (_, _) => AcceptPreview();
+        _preview.AcceptRequested += (_, _) => { _acceptSource = "Мышь"; AcceptPreview(); };
+        _debugWindow = new SessionDebugWindow(_diagnostics, CaptureDiagnostics);
+        if (!Environment.GetCommandLineArgs().Contains("--no-debug-window")) _debugWindow.Show();
         _watch.Tick += (_, _) => UpdatePreview();
         _deferredStartupWatch.Tick += (_, _) => TryAttachDeferredStartup();
         _keyboard = new KeyboardHookPump(input => Application.Current.Dispatcher.BeginInvoke(() =>
@@ -79,19 +144,21 @@ public sealed class LayoutPreviewController : IDisposable
         bool isDown = message is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN;
         bool isUp = message is 0x0101 or 0x0105; // WM_KEYUP / WM_SYSKEYUP
         if (!isDown && !isUp) return Next();
+        if (isDown && vk == 0x7B && input.Control && input.Alt)
+        { _debugWindow?.Toggle(); return Next(); }
 
         if (vk is 0x11 or 0xA2 or 0xA3) { _controlDown = isDown; return Next(); }
         if (vk is 0x12 or 0xA4 or 0xA5) { _altDown = isDown; return Next(); }
         if (vk is Native.VK_LWIN or Native.VK_RWIN)
         {
             _winDown = isDown;
-            if (isDown) Reset();
+            if (isDown) Reset("Нажата клавиша Windows");
             return Next();
         }
         if (isUp) return Next();
         if ((data.flags & Native.LLKHF_INJECTED) != 0 && data.dwExtraInfo == Native.LayoutPreviewInput) return Next();
-        if (_accepting) { Trace.WriteLine("Accept cancelled by intervening input"); Reset(); return Next(); }
-        if ((data.flags & Native.LLKHF_INJECTED) != 0 && !_testInput) { Reset(); return Next(); }
+        if (_accepting) { Trace.WriteLine("Accept cancelled by intervening input"); Reset("Принятие отменено новым вводом"); return Next(); }
+        if ((data.flags & Native.LLKHF_INJECTED) != 0 && !_testInput) { Reset("Внешний синтетический ввод"); return Next(); }
         if (vk is 0x10 or 0xA0 or 0xA1) return Next();
         bool shift = input.Shift;
         // Shortcuts such as Ctrl+A, Ctrl+C and formatting commands do not invalidate
@@ -121,6 +188,8 @@ public sealed class LayoutPreviewController : IDisposable
                 _selectAllEditor = null;
                 _pendingInputs.Clear();
                 ClearDeferredStartup();
+                _diagnostics.End("Ctrl+A и Backspace удалили диапазон сессии", CaptureDiagnostics());
+                _debugConfirmed = "";
                 _session = null; _editor = null; _targetLayout = IntPtr.Zero;
                 _uiaStartupUnconfirmed = false; _visible = false;
                 if (_keyboard != null) _keyboard.AcceptContext = null;
@@ -150,10 +219,10 @@ public sealed class LayoutPreviewController : IDisposable
                 TryQueuePending(data, shift, activeLayout))
                 return Next();
             if (_session == null && TryQueueDeferredStartup(data, shift)) return Next();
-            Trace.WriteLine("Hook context unsupported"); Reset(); return Next();
+            Trace.WriteLine("Hook context unsupported"); Reset("Нет доступного снимка редактора: " + TextEditor.LastCaptureFailure); return Next();
         }
         if (!TryLayout(snapshot.Layout, out var layout))
-        { Trace.WriteLine("Hook layout unsupported"); Reset(); return Next(); }
+        { Trace.WriteLine("Hook layout unsupported"); Reset("Раскладка не EN-US/RU"); return Next(); }
 
         // Accept switches to the target layout. Subsequent characters in that layout
         // are presumed intentional; do not immediately raise an opposite-layout hint
@@ -204,6 +273,7 @@ public sealed class LayoutPreviewController : IDisposable
             }
             // Handle native selection replacement BEFORE the dormant-selection
             // return. Otherwise its first key reaches the app but is never captured.
+            BeginDiagnosticSession("Ввод вместо выделения", selectedStart);
             _session = InputSession.FromSelectionReplacement(snapshot.Text, selectedStart, selectedEnd, guardKey, layout);
             _editor = snapshot with { Text = "" };
             _uiaStartupUnconfirmed = false;
@@ -213,7 +283,7 @@ public sealed class LayoutPreviewController : IDisposable
             _visible = false;
             if (_keyboard != null) _keyboard.AcceptContext = null;
             _preview.HidePreview();
-            if (_targetLayout == IntPtr.Zero) { Reset(); return Next(); }
+            if (_targetLayout == IntPtr.Zero) { Reset("Целевая раскладка не установлена"); return Next(); }
             _watch.Start();
             ScheduleUpdate();
             return Next();
@@ -234,7 +304,7 @@ public sealed class LayoutPreviewController : IDisposable
             TryConfirmUiaStartup(snapshot);
         if (_session != null && (_editor == null || !TextEditor.SameEditor(_editor, snapshot)))
         {
-            Reset();
+            Reset("Изменилось поле ввода");
         }
         else if (_session != null && _pendingInputs.Count > 0)
         {
@@ -243,7 +313,7 @@ public sealed class LayoutPreviewController : IDisposable
             if (_pendingInputs.Count > 0)
             {
                 Trace.WriteLine($"Hook pending input could not be reconciled length={snapshot.Text.Length} selection={snapshot.SelectionStart},{snapshot.SelectionEnd}");
-                Reset();
+                Reset("Ожидающие клавиши не совпали с текстом редактора");
             }
         }
         else if (_session != null && !_session.Matches(snapshot.Text, snapshot.SelectionStart, snapshot.SelectionEnd))
@@ -254,31 +324,33 @@ public sealed class LayoutPreviewController : IDisposable
             if (_pendingUntil > Environment.TickCount64 && TryQueuePending(data, shift, layout))
                 return Next();
             Trace.WriteLine($"Hook mismatch actualLength={snapshot.Text.Length} actualSelection={snapshot.SelectionStart},{snapshot.SelectionEnd} expectedEnd={_session.End}");
-            Reset();
+            Reset("Текст или каретка не совпали с ожидаемой сессией");
         }
         if (vk == Native.VK_RIGHT)
         {
             if (input.AcceptedRight && !shift && _visible && _session?.Preview.Length > 0 && _targetLayout != IntPtr.Zero)
-            { Trace.WriteLine("Accept queued"); _accepting = true; Application.Current.Dispatcher.BeginInvoke(AcceptPreview); return (IntPtr)1; }
-            Trace.WriteLine("Right native: no valid preview"); Reset(); return Next();
+            { _acceptSource = "Стрелка вправо"; Diagnostic("Принятие", "Right зарезервирован подтверждённой подсказкой"); Trace.WriteLine("Accept queued"); _accepting = true; Application.Current.Dispatcher.BeginInvoke(AcceptPreview); return (IntPtr)1; }
+            Trace.WriteLine("Right native: no valid preview"); Reset("Right передан редактору: нет подтверждённой подсказки"); return Next();
         }
         var key = new PhysicalKey(data.vkCode, shift, _capturedCapsLock);
-        if (!KeyboardConversion.TryConvert(key, layout, out _) || snapshot.SelectionStart != snapshot.SelectionEnd) { Reset(); return Next(); }
+        if (!KeyboardConversion.TryConvert(key, layout, out _) || snapshot.SelectionStart != snapshot.SelectionEnd) { Reset("Непечатающая клавиша или активное выделение"); return Next(); }
         if (_session == null)
         {
+            BeginDiagnosticSession("Первый подходящий символ", snapshot.SelectionEnd);
             _session = new InputSession(snapshot.Text, snapshot.SelectionEnd, layout); _editor = snapshot with { Text = "" };
             _uiaStartupUnconfirmed = snapshot.AutomationIdentity.Length > 0;
             Trace.WriteLine($"Session started uia={snapshot.AutomationIdentity.Length > 0} start={snapshot.SelectionEnd} documentLength={snapshot.Text.Length}");
             _targetLayout = FindLayout(_session.TargetLayout);
-            if (_targetLayout == IntPtr.Zero) { Reset(); return Next(); }
+            if (_targetLayout == IntPtr.Zero) { Reset("Целевая раскладка не установлена"); return Next(); }
             _watch.Start();
         }
-        if (_session.Source.Length >= 4096) { Reset(); return Next(); }
+        if (_session.Source.Length >= 4096) { Reset("Достигнут текущий предел 4096 символов"); return Next(); }
         _session.Append(key, layout, snapshot.Text); ScheduleUpdate(); return Next();
         IntPtr Next() => IntPtr.Zero; // Native delivery already happened on the hook thread.
     }
     private void ScheduleUpdate()
     {
+        _debugState = "Ожидание текста редактора";
         _pendingUntil = Environment.TickCount64 + 350;
         if (_updateQueued) return;
         _updateQueued = true;
@@ -316,9 +388,9 @@ public sealed class LayoutPreviewController : IDisposable
                 Native.GetForegroundWindow() == activeEditor.Foreground &&
                 Environment.TickCount64 - activeEditor.CapturedAt < 1200)
                 return;
-            Reset(); return;
+            Reset("Редактор недоступен дольше допуска: " + TextEditor.LastCaptureFailure); return;
         }
-        if (_editor == null || !TextEditor.SameEditor(_editor, current)) { Reset(); return; }
+        if (_editor == null || !TextEditor.SameEditor(_editor, current)) { Reset("Смена окна или поля ввода"); return; }
         if (_pendingInputs.Count == 0 && _lastVerifiedRevision == current.Revision && _lastVerifiedSource == _session.Source)
         { if (_visible) PublishAcceptContext(current); return; }
         TryConfirmUiaStartup(current);
@@ -330,7 +402,7 @@ public sealed class LayoutPreviewController : IDisposable
             if (Environment.TickCount64 >= _pendingUntil)
             {
                 Trace.WriteLine($"Pending input timed out length={current.Text.Length} selection={current.SelectionStart},{current.SelectionEnd}");
-                Reset();
+                Reset("Истекло ожидание подтверждения клавиш (350 мс)");
             }
             return;
         }
@@ -339,6 +411,7 @@ public sealed class LayoutPreviewController : IDisposable
             if (_session.MatchesDocument(current.Text) ||
                 _session.MatchesWithExternalSelection(current.Text, current.SelectionStart, current.SelectionEnd))
             {
+                _debugState = "Сессия сохранена; каретка или выделение вне её конца";
                 _visible = false;
                 if (_keyboard != null) _keyboard.AcceptContext = null;
                 _preview.HidePreview();
@@ -348,12 +421,13 @@ public sealed class LayoutPreviewController : IDisposable
             // never show or accept a suggestion until the exact predicted text arrives.
             // Keep the current preview visible while the editor processes the key so a
             // Backspace update does not look like a new session or replay its entrance.
-            if (Environment.TickCount64 >= _pendingUntil) { Trace.WriteLine($"Update mismatch length={current.Text.Length} selection={current.SelectionStart},{current.SelectionEnd} expectedEnd={_session.End}"); Reset(); }
+            if (Environment.TickCount64 >= _pendingUntil) { Trace.WriteLine($"Update mismatch length={current.Text.Length} selection={current.SelectionStart},{current.SelectionEnd} expectedEnd={_session.End}"); Reset("Документ не совпал с ожидаемым после ожидания ввода"); }
             return;
         }
         _pendingUntil = 0;
         _lastVerifiedRevision = current.Revision;
         _lastVerifiedSource = _session.Source;
+        ConfirmDiagnosticText();
         _editor = current with { Text = "" }; string text = _session.Preview;
         string previewDiagnostic = $"layout={_session.SourceLayout} chars={_session.Source.Length} hintLength={text.Length} selection={current.SelectionStart},{current.SelectionEnd} caretHeight={current.Caret.Bottom - current.Caret.Top}";
         if (previewDiagnostic != _lastPreviewDiagnostic)
@@ -367,6 +441,7 @@ public sealed class LayoutPreviewController : IDisposable
             // Missing screen geometry is a presentation failure, not a document
             // change. Chromium may expose text before it exposes its caret bounds.
             // Retain the verified session boundary until coordinates become usable.
+            _debugState = "Текст подтверждён; геометрия каретки недоступна";
             Trace.WriteLine($"Caret geometry unavailable; session retained start={_session.Start} chars={_session.Source.Length}");
             _visible = false;
             if (_keyboard != null) _keyboard.AcceptContext = null;
@@ -403,6 +478,7 @@ public sealed class LayoutPreviewController : IDisposable
                 new PhysicalKey(data.vkCode, shift, _capturedCapsLock), layout, out _))
             return false;
 
+        _debugState = "Ожидающие клавиши ещё не подтверждены";
         _pendingInputs.Add(new QueuedInput(data.vkCode, shift,
             _capturedCapsLock, layout));
         _pendingUntil = Environment.TickCount64 + 350;
@@ -433,6 +509,7 @@ public sealed class LayoutPreviewController : IDisposable
             }
             _uiaStartupUnconfirmed = false;
             _session = candidate;
+            ConfirmDiagnosticText();
             _editor = snapshot with { Text = "" };
             _pendingInputs.Clear();
             _pendingUntil = 0;
@@ -449,7 +526,7 @@ public sealed class LayoutPreviewController : IDisposable
     {
         if (!_uiaStartupUnconfirmed || _session == null) return;
         if (_session.Matches(snapshot.Text, snapshot.SelectionStart, snapshot.SelectionEnd))
-        { _uiaStartupUnconfirmed = false; return; }
+        { _uiaStartupUnconfirmed = false; ConfirmDiagnosticText(); return; }
         string document = snapshot.Text;
         int caret = snapshot.SelectionStart;
         if (snapshot.SelectionEnd > caret && snapshot.SelectionEnd == document.Length)
@@ -458,6 +535,8 @@ public sealed class LayoutPreviewController : IDisposable
             return;
         Trace.WriteLine($"UIA startup rebased start={_session.Start} chars={confirmed.Source.Length}");
         _session = confirmed;
+        ConfirmDiagnosticText();
+        Diagnostic("Начало уточнено", $"Убран placeholder; подтверждено начало {confirmed.Start}");
         _editor = snapshot with { Text = "" };
         _uiaStartupUnconfirmed = false;
     }
@@ -482,6 +561,7 @@ public sealed class LayoutPreviewController : IDisposable
             ClearDeferredStartup();
         if (_deferredStartupInputs.Count == 0)
         {
+            Diagnostic("Ожидание поля", "Сохраняются физические клавиши до первого доступного снимка");
             _deferredStartupForeground = foreground;
             _deferredStartupThread = thread;
         }
@@ -495,7 +575,7 @@ public sealed class LayoutPreviewController : IDisposable
     private bool TryAttachDeferredStartup()
     {
         if (Environment.TickCount64 > _deferredStartupUntil)
-        { ClearDeferredStartup(); return false; }
+        { Diagnostic("Начало отклонено", "Первый снимок не подтвердил захваченный ввод за 800 мс"); ClearDeferredStartup(); return false; }
         return TextEditor.TryRead(out var snapshot) && TryAttachDeferredStartup(snapshot);
     }
 
@@ -528,11 +608,13 @@ public sealed class LayoutPreviewController : IDisposable
         if (!session.Reconcile(snapshot.Text, snapshot.SelectionStart, snapshot.SelectionEnd))
             return false;
 
+        BeginDiagnosticSession("Захваченный ввод подтверждён первым снимком", start);
         _session = session;
+        ConfirmDiagnosticText();
         _editor = snapshot with { Text = "" };
         _targetLayout = FindLayout(session.TargetLayout);
         ClearDeferredStartup();
-        if (_targetLayout == IntPtr.Zero) { Reset(); return false; }
+        if (_targetLayout == IntPtr.Zero) { Reset("Целевая раскладка не установлена"); return false; }
         _watch.Start();
         ScheduleUpdate();
         Trace.WriteLine($"Deferred startup attached chars={source.Length}");
@@ -551,12 +633,14 @@ public sealed class LayoutPreviewController : IDisposable
     {
         if (_disposed || !_visible || _session == null || _editor == null || _session.Preview.Length == 0) { _accepting = false; return; }
         if (_keyboard != null) _keyboard.AcceptContext = null;
+        _acceptDiagnostics.Begin(_diagnostics.SessionId);
+        Diagnostic("Принятие", _acceptSource + ": проверка всей сессии");
         _accepting = true; var session = _session; var editor = _editor; int generation = _generation;
         bool replacementConfirmed = false;
         IntPtr originalLayout = IntPtr.Zero;
         try
         {
-            if (!TextEditor.TryRead(out var current) || !TextEditor.SameEditor(editor, current)) return;
+            if (!TextEditor.TryRead(out var current) || !TextEditor.SameEditor(editor, current)) { Diagnostic("Отказ", "Недоступен исходный редактор перед принятием: " + TextEditor.LastCaptureFailure); return; }
             // A click can arrive while the UIA cache still lags behind the keystrokes
             // that formed the visible preview. Wait briefly for an exact text/caret
             // reconciliation; never accept only the confirmed prefix.
@@ -566,16 +650,19 @@ public sealed class LayoutPreviewController : IDisposable
                     TryReconcilePending(current);
                 if (_pendingInputs.Count > 0) await Task.Delay(20);
             }
-            if (_pendingInputs.Count > 0 || _session == null || _editor == null) return;
+            if (_pendingInputs.Count > 0 || _session == null || _editor == null) { Diagnostic("Отказ", "Не подтверждены все клавиши сессии"); return; }
             session = _session; editor = _editor;
-            if (!TextEditor.TryRead(out current) || !TextEditor.SameEditor(editor, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd)) return;
+            if (!TextEditor.TryRead(out current) || !TextEditor.SameEditor(editor, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd)) { Diagnostic("Отказ", "Перед принятием не совпали поле, полный текст или каретка"); return; }
+            Diagnostic("Принятие", $"Проверен диапазон [{session.Start}, {session.End}), символов {session.Source.Length}");
             originalLayout = current.Layout;
-            if (!await TextEditor.TrySwitchLayoutAsync(editor, session, _targetLayout) || generation != _generation) { Trace.WriteLine("Accept switch failed"); return; }
+            if (!await TextEditor.TrySwitchLayoutAsync(editor, session, _targetLayout) || generation != _generation) { Diagnostic("Отказ", "Переключение раскладки не подтверждено или операция отменена"); Trace.WriteLine("Accept switch failed"); return; }
+            Diagnostic("Принятие", "Целевая раскладка подтверждена; начинается проверенная замена");
             Trace.WriteLine("Accept layout switched");
             if (generation == _generation)
             {
                 bool replaced = await TextEditor.TryReplaceAsync(editor, session, _targetLayout, () => generation == _generation && _accepting);
                 replacementConfirmed = replaced;
+                Diagnostic("Замена", replaced ? "Полный результат подтверждён редактором" : "Результат замены не подтверждён; подробности в событиях backend");
                 Trace.WriteLine("Accept replace result: " + replaced);
                 if (replaced && TextEditor.TryRead(out var accepted) &&
                     accepted.SelectionStart == accepted.SelectionEnd &&
@@ -589,7 +676,7 @@ public sealed class LayoutPreviewController : IDisposable
             // an unaccepted hint, or leave a 90-ms editing gap before replacement.
             if (replacementConfirmed) await _preview.PlayAcceptAnimationAsync();
         }
-        catch (Exception error) { Trace.WriteLine("Accept exception: " + error.GetType().Name); }
+        catch (Exception error) { Diagnostic("Ошибка принятия", error.GetType().Name); Trace.WriteLine("Accept exception: " + error.GetType().Name); }
         finally
         {
             Trace.WriteLine("Accept finished");
@@ -599,8 +686,8 @@ public sealed class LayoutPreviewController : IDisposable
             if (retryable && originalLayout != IntPtr.Zero)
                 await TextEditor.TrySwitchLayoutAsync(editor, session, originalLayout);
             _accepting = false;
-            if (retryable && generation == _generation) UpdatePreview();
-            else Reset();
+            if (retryable && generation == _generation) { Diagnostic("Повтор доступен", "Исходные текст и каретка подтверждены; подсказка сохранена"); UpdatePreview(); }
+            else Reset(replacementConfirmed ? "Вся сессия принята" : "Принятие не подтверждено; сессия завершена");
         }
     }
     internal static bool TryLayout(IntPtr hkl, out KeyboardLayout layout)
@@ -614,8 +701,10 @@ public sealed class LayoutPreviewController : IDisposable
         var list = new IntPtr[count]; Native.GetKeyboardLayoutList(count, list);
         return list.FirstOrDefault(hkl => (ulong)hkl.ToInt64() == (desired == KeyboardLayout.Russian ? 0x04190419UL : 0x04090409UL));
     }
-    private void Reset([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
+    private void Reset(string reason = "Сброс состояния", [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
+        _diagnostics.End(reason + $" ({caller})", CaptureDiagnostics());
+        _debugConfirmed = "";
         _lastVerifiedRevision = -1;
         _lastVerifiedSource = "";
         if (_keyboard != null) _keyboard.AcceptContext = null;
@@ -630,9 +719,11 @@ public sealed class LayoutPreviewController : IDisposable
     public void Dispose()
     {
         TextEditor.SnapshotChanged -= OnSnapshotChanged;
-        _disposed = true; Reset();
+        _disposed = true; Reset("Утилита остановлена");
+        _debugWindow?.Shutdown();
         _keyboard?.Dispose();
         TextEditor.Stop();
+        Trace.Listeners.Remove(_acceptDiagnostics);
         _preview.Close();
     }
 }

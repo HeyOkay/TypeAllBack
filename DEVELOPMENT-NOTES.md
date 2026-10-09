@@ -1,5 +1,22 @@
 # Decisions retained from user feedback
 
+- 2026-10-09, current-state interview: Chrome, Discord, ChatGPT and Notepad show
+  no noticeable lag and no reported false hints. Backspace and selection replacement
+  work. Accept can leave the first character or part of a sentence unchanged,
+  rarely change nothing; Right sometimes fails. Causes are not yet established.
+- The user withdrew the requirement to preserve a session through editing in its
+  middle. Do not implement that as an obligatory feature. Preserve working Backspace
+  and selection replacement. Manual layout change must end the old session and allow
+  a new one; the ten-word limit must end on the space following word ten. These policy
+  changes and runtime rule switches belong to M1.2, not the observation-only M1.1.
+- M1.1 adds a separate memory-only session debug window. Full captured session text
+  is explicitly authorized for display there, not for disk logging or model training.
+  Show confirmed versus projected text, starts/ends and Accept stages. Keep 200 events
+  and the last completed session only. Refresh at most every 150 ms while visible;
+  opening does not activate the window. Ctrl+Alt+F12 toggles it; close hides it;
+  --no-debug-window starts it hidden. Existing session/accept behavior is retained.
+
+
 - The original master prompt is an evolving specification. Later user feedback
   takes priority; record material behavior changes instead of silently following
   contradictory initial requirements.

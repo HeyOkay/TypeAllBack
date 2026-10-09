@@ -104,23 +104,27 @@ internal static class NotepadEditor
     }
     public static bool TryReplace(EditorSnapshot expected, InputSession session, IntPtr targetLayout, Func<bool>? stillValid = null)
     {
+        bool Reject(string reason) { Trace.WriteLine("Accept check: Native — " + reason); return false; }
+        Trace.WriteLine("Accept check: Native — получен запрос замены");
         bool Valid() => stillValid?.Invoke() != false;
-        if (!Valid()) return false;
-        if (!TryRead(out var current) || !SameEditor(expected, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd)) return false;
-        if (Native.GetKeyboardLayout(current.Thread) != targetLayout) return false;
-        if (!TryRead(out current) || !SameEditor(expected, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd) || !Valid()) return false;
+        if (!Valid()) return Reject("Запрос отменён до чтения поля");
+        if (!TryRead(out var current) || !SameEditor(expected, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd)) return Reject("Первое чтение не подтвердило поле, весь текст или каретку");
+        if (Native.GetKeyboardLayout(current.Thread) != targetLayout) return Reject("Целевая раскладка не подтверждена");
+        if (!TryRead(out current) || !SameEditor(expected, current) || !session.Matches(current.Text, current.SelectionStart, current.SelectionEnd) || !Valid()) return Reject("Перед выделением не совпали поле, документ, каретка или запрос отменён");
         string replacement = session.Replacement; var text = Marshal.StringToHGlobalUni(replacement);
         try
         {
             Trace.WriteLine("Replace verified context");
-            if (!TryMessage(current.Editor, EM_SETSEL, (IntPtr)session.Start, (IntPtr)session.End, out _)) { Trace.WriteLine("SetSel failed"); return false; }
+            if (!TryMessage(current.Editor, EM_SETSEL, (IntPtr)session.Start, (IntPtr)session.End, out _)) { Trace.WriteLine("SetSel failed"); return Reject("Редактор не подтвердил команду выделения"); }
             if (!TryRead(out var selected) || !SameEditor(current, selected) || selected.Text != current.Text ||
                 selected.SelectionStart != session.Start || selected.SelectionEnd != session.End ||
-                selected.Layout != targetLayout || !Valid()) return false;
+                selected.Layout != targetLayout || !Valid()) return Reject("Выделение всей сессии не подтверждено или запрос отменён");
             Trace.WriteLine("Replace verified selection");
-            if (!TryMessage(current.Editor, EM_REPLACESEL, (IntPtr)1, text, out _)) { Trace.WriteLine("ReplaceSel failed"); return false; }
+            if (!TryMessage(current.Editor, EM_REPLACESEL, (IntPtr)1, text, out _)) { Trace.WriteLine("ReplaceSel failed"); return Reject("Редактор не подтвердил команду замены; результат требует проверки"); }
             string expectedText = current.Text.Remove(session.Start, session.Source.Length).Insert(session.Start, replacement);
-            return TryRead(out var result) && SameEditor(current, result) && result.Text == expectedText && result.SelectionStart == session.Start + replacement.Length && result.SelectionEnd == result.SelectionStart;
+            bool verified = TryRead(out var result) && SameEditor(current, result) && result.Text == expectedText && result.SelectionStart == session.Start + replacement.Length && result.SelectionEnd == result.SelectionStart;
+            Trace.WriteLine("Accept check: Native — " + (verified ? "Весь документ и каретка после замены подтверждены" : "Результат замены не подтверждён"));
+            return verified;
         }
         finally { Marshal.FreeHGlobal(text); }
     }

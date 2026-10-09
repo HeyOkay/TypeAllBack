@@ -4,6 +4,7 @@ namespace LayoutPreviewPrototype;
 internal static class TextEditor
 {
     private static readonly UiaTextEditor Automation = new();
+    public static string LastCaptureFailure => Automation.LastCaptureFailure;
     public static void Start() => Automation.Start();
     public static void Stop() => Automation.Dispose();
     public static event Action? SnapshotChanged { add => Automation.SnapshotChanged += value; remove => Automation.SnapshotChanged -= value; }

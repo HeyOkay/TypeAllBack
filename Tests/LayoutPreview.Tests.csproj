@@ -6,6 +6,8 @@
     <Compile Include="../KeyboardConversion.cs" Link="KeyboardConversion.cs" />
     <Compile Include="../LanguagePlausibility.cs" Link="LanguagePlausibility.cs" />
     <Compile Include="../InputSession.cs" Link="InputSession.cs" />
+    <Compile Include="../SessionDiagnostics.cs" Link="SessionDiagnostics.cs" />
+    <Compile Include="../AcceptDiagnosticListener.cs" Link="AcceptDiagnosticListener.cs" />
     <Compile Include="../AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
     <Compile Include="../Native.cs" Link="Native.cs" />
     <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />

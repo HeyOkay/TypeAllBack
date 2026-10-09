@@ -9,6 +9,8 @@ namespace LayoutPreviewPrototype;
 internal sealed class UiaTextEditor : IDisposable
 {
     private const int MaximumText = 65536;
+    private string _lastCaptureFailure = "Снимок ещё не получен";
+    public string LastCaptureFailure => Volatile.Read(ref _lastCaptureFailure);
     private readonly ConcurrentQueue<Action> _commands = new();
     private readonly AutoResetEvent _wake = new(false);
     private EditorSnapshot? _snapshot;
@@ -238,18 +240,21 @@ internal sealed class UiaTextEditor : IDisposable
 
     private bool Replace(EditorSnapshot expected, InputSession session, IntPtr layout, Func<bool> stillValid)
     {
+        bool Reject(string reason) { Trace.WriteLine("Accept check: UIA — " + reason); return false; }
+        Trace.WriteLine("Accept check: UIA — получен запрос замены");
         if (!stillValid() || !Capture(out var before, out _, out var pattern, out var saved, false) || before == null ||
             !TextEditor.SameEditor(expected, before) || !session.Matches(before.Text, before.SelectionStart, before.SelectionEnd) || before.Layout != layout)
-            return false;
+            return Reject("Перед выделением не совпали поле, текст, каретка, раскладка или отменён запрос");
         string replacement = session.Replacement;
-        if (replacement.Any(char.IsControl)) return false;
+        if (replacement.Any(char.IsControl)) return Reject("В замене обнаружены управляющие символы");
         // UTF-16 offsets before the session can contain surrogate pairs/graphemes.
         // Anchor at the verified caret and move across only the physically typed
         // EN/RU characters; never interpret the old prefix as Character-unit counts.
         var range = saved!.Clone();
         if (range.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -session.Source.Length) != -session.Source.Length)
-            return false;
-        if (range.GetText(MaximumText + 1) != session.Source || !stillValid()) return false;
+            return Reject("Провайдер не выделил полный диапазон сессии");
+        if (range.GetText(MaximumText + 1) != session.Source || !stillValid()) return Reject("Текст выделяемого диапазона не совпал или запрос отменён");
+        Trace.WriteLine("Accept check: UIA — полный диапазон проверен; запрос выделения");
         range.Select();
         EditorSnapshot? selected = null;
         bool selectionConfirmed = false;
@@ -269,27 +274,29 @@ internal sealed class UiaTextEditor : IDisposable
             if (stillValid() && Native.GetForegroundWindow() == before.Foreground && selected != null &&
                 TextEditor.SameEditor(before, selected) && selected.Text == before.Text && selected.Layout == layout)
                 saved!.Select();
-            return false;
+            return Reject("Выделение диапазона не подтверждено либо операция отменена");
         }
         // TextPattern cannot insert text. Replace only the verified selection using
         // Unicode keyboard input; never use the clipboard or a whole-field SetValue.
         var inputs = replacement.SelectMany(c => new[] { Unicode(c, false), Unicode(c, true) }).ToArray();
         if (!stillValid() || Native.GetForegroundWindow() != before.Foreground ||
-            Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Native.INPUT>()) != inputs.Length) return false;
+            Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Native.INPUT>()) != inputs.Length) return Reject("Unicode-ввод не отправлен полностью либо контекст изменился; результат требует проверки");
+        Trace.WriteLine("Accept check: UIA — ввод отправлен; проверка результата");
         string expectedText = before.Text.Remove(session.Start, session.Source.Length).Insert(session.Start, replacement);
         for (int i = 0; i < 25 && stillValid(); i++)
         {
-            if (Native.GetForegroundWindow() != before.Foreground) return false;
+            if (Native.GetForegroundWindow() != before.Foreground) return Reject("Во время подтверждения результата сменилось окно");
             bool captured = Capture(out var after, out _, out _, out _, false) && after != null;
-            if (captured && !TextEditor.SameEditor(before, after!)) return false;
+            if (captured && !TextEditor.SameEditor(before, after!)) return Reject("Во время подтверждения результата сменилось поле");
             if (captured && after!.Text == expectedText && after.SelectionStart == session.Start + replacement.Length && after.SelectionEnd == after.SelectionStart)
             {
                 Publish(after);
+                Trace.WriteLine("Accept check: UIA — весь документ и каретка после замены подтверждены");
                 return true;
             }
             Thread.Sleep(20);
         }
-        return false;
+        return Reject("За отведённое ожидание результат замены не подтверждён");
     }
 
     private static Native.INPUT Unicode(char c, bool up) => new()
@@ -439,6 +446,7 @@ internal sealed class UiaTextEditor : IDisposable
             // A focus event can race the optional formatting calls after the
             // document check. Never republish the old field across that event.
             if (captureFocusGeneration != Volatile.Read(ref _focusGeneration)) snapshot = null;
+            Volatile.Write(ref _lastCaptureFailure, snapshot == null ? stage : "");
             if (snapshot == null)
             {
                 PerformanceDiagnostics.Observe("unavailable-" + stage, 0);
