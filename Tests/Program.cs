@@ -570,4 +570,30 @@ Eq(PreviewMetrics.ResolveFontSize(12, 30, 120, 19.2, true, false, missingOmnibox
     "available smaller font metadata takes precedence over omnibox fallback");
 Eq(PreviewMetrics.ResolveFontSize(0, 22, 120, 14.666666666666666, false, true, "UIA character"), 14.666666666666666,
     "missing native or other UIA metadata still preserves the established size");
+var lightPixels = Enumerable.Repeat(0xFFFFFF, 12 * 24).ToArray();
+for (int y = 6; y < 14; y++) for (int x = 4; x < 7; x++) lightPixels[y * 12 + x] = 0;
+var lightField = LocalFieldAppearance.Analyze(lightPixels, 12, 24)!;
+Eq(lightField.Background, System.Windows.Media.Colors.White, "local field background overrides the global dark theme");
+Eq(lightField.Foreground, (System.Windows.Media.Color?)System.Windows.Media.Colors.Black, "glyph pixels reveal dark text on a light field");
+Eq(lightField.GlyphHeight, 8, "font estimate uses ink height instead of padded 24px line height");
+var darkPixels = lightPixels.Select(value => 0xFFFFFF ^ value).ToArray();
+var darkField = LocalFieldAppearance.Analyze(darkPixels, 12, 24)!;
+Eq(darkField.Background, System.Windows.Media.Colors.Black, "dark field sampling does not depend on website or system theme");
+Eq(darkField.Foreground, (System.Windows.Media.Color?)System.Windows.Media.Colors.White, "dark field text is sampled independently");
+var ambiguousPixels = Enumerable.Range(0, 12 * 24).Select(i => i % 2 == 0 ? 0 : 0xFFFFFF).ToArray();
+Eq(LocalFieldAppearance.Analyze(ambiguousPixels, 12, 24), null, "ambiguous background cannot authorize a field palette");
+Eq(LocalFieldAppearance.Analyze(new int[10000], 100, 100), null, "sampling dimensions are strictly bounded");
+var blankField = LocalFieldAppearance.Analyze(Enumerable.Repeat(0xFFFFFF,12*24).ToArray(),12,24)!;
+Eq(blankField.GlyphHeight,0,"blank areas cannot produce a guessed font from line height");
+double at96 = LocalFieldAppearance.EstimateSize('n',12,96,"Segoe UI",400,false);
+double at144 = LocalFieldAppearance.EstimateSize('n',18,144,"Segoe UI",400,false);
+Eq(at96 > 0,true,"known single-glyph geometry can estimate a logical size");
+Eq(Math.Abs(at96-at144)<0.001,true,"glyph-based logical size is independent of DPI");
+Eq(LocalFieldAppearance.EstimateSize(' ',12,96,"Segoe UI",400,false),0.0,"whitespace cannot be mistaken for a glyph font measurement");
+Eq(LocalFieldAppearance.EstimateSize('n',0,96,"Segoe UI",400,false),0.0,"missing glyph pixels cannot authorize font changes");
+var neighboringGlyphs = Enumerable.Repeat(0xFFFFFF, 20 * 24).ToArray();
+for (int y=3;y<19;y++) for(int x=2;x<5;x++) neighboringGlyphs[y*20+x]=0;
+for (int y=7;y<15;y++) for(int x=12;x<15;x++) neighboringGlyphs[y*20+x]=0;
+Eq(LocalFieldAppearance.Analyze(neighboringGlyphs,20,24)!.GlyphHeight,8,
+    "near-caret font sampling uses the last glyph rather than a taller neighbor");
 Console.WriteLine($"PASS: {checks} regression checks");
