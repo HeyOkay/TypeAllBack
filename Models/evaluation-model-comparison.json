@@ -1,0 +1,1141 @@
+{
+  "release": "r2.16",
+  "inputs": [
+    {
+      "file": "ru_taiga-ud-train-a.conllu",
+      "sha256": "5742b399654d5a022dbf0a0f362f1c0be4ccd34053cda366becc224db85e7188"
+    },
+    {
+      "file": "ru_taiga-ud-train-b.conllu",
+      "sha256": "9e759614de1e361a02a5191130cc7dad00917244ccbf37d998cd6d6ba8405fa2"
+    },
+    {
+      "file": "ru_taiga-ud-train-c.conllu",
+      "sha256": "20686b52908533f3b7609753aeb2beeb4d36eb1c84e3c8fe30cbb39c6749a3f0"
+    },
+    {
+      "file": "ru_taiga-ud-train-d.conllu",
+      "sha256": "85cc91b958c705f5d31fc6bde3fdd13f7569cfbfbbac6ce382a5380aa3cf676c"
+    },
+    {
+      "file": "ru_taiga-ud-train-e.conllu",
+      "sha256": "de401c0920f95757472f5ac0264be108978606658836bebe63bbf80f513a4549"
+    }
+  ],
+  "training": {
+    "taiga": {
+      "sentences": 119490,
+      "characters": 7522483,
+      "wordforms": 143353,
+      "ngrams": 12264,
+      "model_bytes": 158702,
+      "model_sha256": "e25455676f40f859467fbd8bdd205f44f24863ff288951df6485f823807d6383"
+    },
+    "mixed": {
+      "sentences": 123340,
+      "characters": 7878411,
+      "wordforms": 151796,
+      "ngrams": 12868,
+      "model_bytes": 165810,
+      "model_sha256": "dfa1ae935f1ee749ebd4e3ee3f53389c957b9d4f4a5611725942bfc7844cc43a"
+    }
+  },
+  "excludedDuplicates": {
+    "ewt-dev": 208,
+    "gsd-dev": 9,
+    "taiga-dev": 79,
+    "ewt-test": 242,
+    "gsd-test": 8,
+    "taiga-test": 47
+  },
+  "evaluation": {
+    "gsd": [
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1082,
+        "detectPercent": 65.7,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1587,
+        "detectPercent": 96.36,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1632,
+        "detectPercent": 99.09,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1510,
+        "false": 0,
+        "detected": 1507,
+        "detectPercent": 99.8,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1644,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 496,
+        "false": 0,
+        "detected": 283,
+        "detectPercent": 57.06,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 496,
+        "false": 0,
+        "detected": 479,
+        "detectPercent": 96.57,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 496,
+        "false": 0,
+        "detected": 490,
+        "detectPercent": 98.79,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 492,
+        "false": 0,
+        "detected": 490,
+        "detectPercent": 99.59,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 496,
+        "false": 0,
+        "detected": 496,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 1011,
+        "false": 1,
+        "detected": 504,
+        "detectPercent": 49.85,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 1011,
+        "false": 1,
+        "detected": 915,
+        "detectPercent": 90.5,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 1011,
+        "false": 0,
+        "detected": 984,
+        "detectPercent": 97.33,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 915,
+        "false": 0,
+        "detected": 907,
+        "detectPercent": 99.13,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 1011,
+        "false": 0,
+        "detected": 1010,
+        "detectPercent": 99.9,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1027,
+        "detectPercent": 62.43,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1645,
+        "false": 1,
+        "detected": 1557,
+        "detectPercent": 94.65,
+        "falsePercent": 0.06
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1623,
+        "detectPercent": 98.66,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1507,
+        "false": 0,
+        "detected": 1503,
+        "detectPercent": 99.73,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1642,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 506,
+        "false": 1,
+        "detected": 273,
+        "detectPercent": 53.95,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 506,
+        "false": 1,
+        "detected": 474,
+        "detectPercent": 93.68,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 506,
+        "false": 0,
+        "detected": 495,
+        "detectPercent": 97.83,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 501,
+        "false": 0,
+        "detected": 499,
+        "detectPercent": 99.6,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 506,
+        "false": 0,
+        "detected": 506,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 996,
+        "false": 1,
+        "detected": 554,
+        "detectPercent": 55.62,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 996,
+        "false": 2,
+        "detected": 900,
+        "detectPercent": 90.36,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 996,
+        "false": 0,
+        "detected": 960,
+        "detectPercent": 96.39,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 899,
+        "false": 0,
+        "detected": 896,
+        "detectPercent": 99.67,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 996,
+        "false": 0,
+        "detected": 995,
+        "detectPercent": 99.9,
+        "falsePercent": 0.0
+      }
+    ],
+    "taiga": [
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1647,
+        "false": 1,
+        "detected": 1082,
+        "detectPercent": 65.7,
+        "falsePercent": 0.06
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1580,
+        "detectPercent": 95.93,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1635,
+        "detectPercent": 99.27,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1510,
+        "false": 0,
+        "detected": 1507,
+        "detectPercent": 99.8,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1644,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 496,
+        "false": 0,
+        "detected": 275,
+        "detectPercent": 55.44,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 496,
+        "false": 0,
+        "detected": 472,
+        "detectPercent": 95.16,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 496,
+        "false": 0,
+        "detected": 491,
+        "detectPercent": 98.99,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 492,
+        "false": 0,
+        "detected": 489,
+        "detectPercent": 99.39,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 496,
+        "false": 0,
+        "detected": 496,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 1011,
+        "false": 0,
+        "detected": 509,
+        "detectPercent": 50.35,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 1011,
+        "false": 0,
+        "detected": 933,
+        "detectPercent": 92.28,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 1011,
+        "false": 0,
+        "detected": 1002,
+        "detectPercent": 99.11,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 915,
+        "false": 0,
+        "detected": 914,
+        "detectPercent": 99.89,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 1011,
+        "false": 0,
+        "detected": 1010,
+        "detectPercent": 99.9,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1026,
+        "detectPercent": 62.37,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1645,
+        "false": 1,
+        "detected": 1558,
+        "detectPercent": 94.71,
+        "falsePercent": 0.06
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1624,
+        "detectPercent": 98.72,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1507,
+        "false": 0,
+        "detected": 1503,
+        "detectPercent": 99.73,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1642,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 506,
+        "false": 1,
+        "detected": 272,
+        "detectPercent": 53.75,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 506,
+        "false": 1,
+        "detected": 464,
+        "detectPercent": 91.7,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 506,
+        "false": 0,
+        "detected": 492,
+        "detectPercent": 97.23,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 501,
+        "false": 0,
+        "detected": 498,
+        "detectPercent": 99.4,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 506,
+        "false": 0,
+        "detected": 506,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 996,
+        "false": 1,
+        "detected": 553,
+        "detectPercent": 55.52,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 996,
+        "false": 2,
+        "detected": 925,
+        "detectPercent": 92.87,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 996,
+        "false": 1,
+        "detected": 980,
+        "detectPercent": 98.39,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 899,
+        "false": 0,
+        "detected": 897,
+        "detectPercent": 99.78,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 996,
+        "false": 0,
+        "detected": 996,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      }
+    ],
+    "mixed": [
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1647,
+        "false": 1,
+        "detected": 1082,
+        "detectPercent": 65.7,
+        "falsePercent": 0.06
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1580,
+        "detectPercent": 95.93,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1635,
+        "detectPercent": 99.27,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1510,
+        "false": 0,
+        "detected": 1507,
+        "detectPercent": 99.8,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1647,
+        "false": 0,
+        "detected": 1644,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 496,
+        "false": 0,
+        "detected": 276,
+        "detectPercent": 55.65,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 496,
+        "false": 0,
+        "detected": 476,
+        "detectPercent": 95.97,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 496,
+        "false": 0,
+        "detected": 491,
+        "detectPercent": 98.99,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 492,
+        "false": 0,
+        "detected": 490,
+        "detectPercent": 99.59,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 496,
+        "false": 0,
+        "detected": 496,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 1011,
+        "false": 0,
+        "detected": 511,
+        "detectPercent": 50.54,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 1011,
+        "false": 0,
+        "detected": 932,
+        "detectPercent": 92.19,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 1011,
+        "false": 0,
+        "detected": 1001,
+        "detectPercent": 99.01,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 915,
+        "false": 0,
+        "detected": 914,
+        "detectPercent": 99.89,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "dev",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 1011,
+        "false": 0,
+        "detected": 1010,
+        "detectPercent": 99.9,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 3,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1028,
+        "detectPercent": 62.49,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 5,
+        "samples": 1645,
+        "false": 1,
+        "detected": 1558,
+        "detectPercent": 94.71,
+        "falsePercent": 0.06
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 10,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1624,
+        "detectPercent": 98.72,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 20,
+        "samples": 1507,
+        "false": 0,
+        "detected": 1503,
+        "detectPercent": 99.73,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "ewt",
+        "length": 160,
+        "samples": 1645,
+        "false": 0,
+        "detected": 1642,
+        "detectPercent": 99.82,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 3,
+        "samples": 506,
+        "false": 1,
+        "detected": 273,
+        "detectPercent": 53.95,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 5,
+        "samples": 506,
+        "false": 1,
+        "detected": 466,
+        "detectPercent": 92.09,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 10,
+        "samples": 506,
+        "false": 0,
+        "detected": 495,
+        "detectPercent": 97.83,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 20,
+        "samples": 501,
+        "false": 0,
+        "detected": 498,
+        "detectPercent": 99.4,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "gsd",
+        "length": 160,
+        "samples": 506,
+        "false": 0,
+        "detected": 506,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 3,
+        "samples": 996,
+        "false": 1,
+        "detected": 556,
+        "detectPercent": 55.82,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 5,
+        "samples": 996,
+        "false": 2,
+        "detected": 927,
+        "detectPercent": 93.07,
+        "falsePercent": 0.2
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 10,
+        "samples": 996,
+        "false": 1,
+        "detected": 983,
+        "detectPercent": 98.69,
+        "falsePercent": 0.1
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 20,
+        "samples": 899,
+        "false": 0,
+        "detected": 898,
+        "detectPercent": 99.89,
+        "falsePercent": 0.0
+      },
+      {
+        "split": "test",
+        "corpus": "taiga",
+        "length": 160,
+        "samples": 996,
+        "false": 0,
+        "detected": 996,
+        "detectPercent": 100.0,
+        "falsePercent": 0.0
+      }
+    ]
+  },
+  "fixtures": {
+    "gsd": [
+      {
+        "phrase": "как ты думаешь",
+        "score": -3.8408,
+        "margin": 1.7615,
+        "detected": false,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "думаешь",
+        "score": -4.6323,
+        "margin": 0.601,
+        "detected": false,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "что делаешь",
+        "score": -3.6168,
+        "margin": 2.9025,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "ты знаешь",
+        "score": -4.6452,
+        "margin": 0.2993,
+        "detected": false,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "привет мир",
+        "score": -2.0815,
+        "margin": 4.4235,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "спасибо",
+        "score": -2.7203,
+        "margin": 4.4826,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "hello world",
+        "score": -2.0941,
+        "margin": 5.2097,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "this is a normal message",
+        "score": -1.9615,
+        "margin": 7.0638,
+        "detected": true,
+        "falseOnProper": false
+      }
+    ],
+    "taiga": [
+      {
+        "phrase": "как ты думаешь",
+        "score": -2.2767,
+        "margin": 3.3257,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "думаешь",
+        "score": -2.3011,
+        "margin": 2.9321,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "что делаешь",
+        "score": -2.0458,
+        "margin": 4.4735,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "ты знаешь",
+        "score": -2.4917,
+        "margin": 2.4528,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "привет мир",
+        "score": -2.1076,
+        "margin": 4.3974,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "спасибо",
+        "score": -2.4142,
+        "margin": 4.7888,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "hello world",
+        "score": -2.0941,
+        "margin": 6.3534,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "this is a normal message",
+        "score": -1.9615,
+        "margin": 6.8176,
+        "detected": true,
+        "falseOnProper": false
+      }
+    ],
+    "mixed": [
+      {
+        "phrase": "как ты думаешь",
+        "score": -2.2911,
+        "margin": 3.3113,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "думаешь",
+        "score": -2.3174,
+        "margin": 2.9158,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "что делаешь",
+        "score": -2.0595,
+        "margin": 4.4597,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "ты знаешь",
+        "score": -2.5108,
+        "margin": 2.4336,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "привет мир",
+        "score": -2.1059,
+        "margin": 4.399,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "спасибо",
+        "score": -2.4247,
+        "margin": 4.7783,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "hello world",
+        "score": -2.0941,
+        "margin": 6.3653,
+        "detected": true,
+        "falseOnProper": false
+      },
+      {
+        "phrase": "this is a normal message",
+        "score": -1.9615,
+        "margin": 6.6987,
+        "detected": true,
+        "falseOnProper": false
+      }
+    ]
+  },
+  "selection": {
+    "model": "mixed",
+    "basis": "dev split balance across Taiga/GSD, thresholds unchanged; test is reported without tuning",
+    "absoluteThreshold": -3.7,
+    "marginThreshold": 1.0
+  }
+}

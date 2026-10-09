@@ -644,6 +644,10 @@ oneProbe.Enrich(measurable with {Caret=new Native.RECT {Top=0,Bottom=26}},null!,
 Eq(probeReads,1,"caret rectangle jitter does not reset the one-attempt budget");
 oneProbe.Enrich(measurable,null!,2);
 Eq(probeReads,2,"independent focus context receives one new attempt");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("rfr ns levftim","как ты думаешь",KeyboardLayout.English),true,"conversation phrase remains recognized after final soft sign");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("levftim","думаешь",KeyboardLayout.English),true,"conversational inflection is learned from independent corpus");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("ns pyftim","ты знаешь",KeyboardLayout.English),true,"other conversational inflections improve without a whitelist");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("как ты думаешь","rfr ns levftim",KeyboardLayout.Russian),false,"proper Russian phrase does not suggest English corruption");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);
