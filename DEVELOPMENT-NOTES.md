@@ -351,3 +351,7 @@
   intent and accepted-layout suppression apply to native snapshots too. Refresh
   the guard's last confirmed timestamp, keeping its accepted layout, so a brief
   capture gap cannot restart suggestions in the same typing flow.
+
+## 2026-10-10 — Подтверждение ChatGPT и оставшееся расхождение Chrome
+
+Пользователь подтвердил исправление шрифта в ChatGPT. На видео нвротенс.mp4 центральный поиск Google в Chrome: руддщ -> hello корректно, подсказка визуально немного крупнее. Для определения источника размера нужны строки «Шрифт подсказки»/«Оценка шрифта» данного поля; видео не содержит runtime-метрик. Код не изменён до уточнения этих данных, подтверждённые UIA-метрики ChatGPT сохраняются.
