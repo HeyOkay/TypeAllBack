@@ -37,6 +37,7 @@ internal sealed class UiaRangeFont
     internal static bool HasReportedFont(EditorSnapshot snapshot) =>
         double.IsFinite(snapshot.FontSizeDip) && snapshot.FontSizeDip is > 0 and <= 256 &&
         !string.IsNullOrWhiteSpace(snapshot.FontFamilyName) &&
+        !PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic).Substituted &&
         PreviewMetrics.HasReliableFormatting(snapshot.FontSource) &&
         !snapshot.FontSource.StartsWith("UIA range-width estimate", StringComparison.Ordinal);
 
@@ -50,11 +51,14 @@ internal sealed class UiaRangeFont
     public EditorSnapshot Enrich(EditorSnapshot snapshot, TextPatternRange caret, int generation)
     {
         if (!RangeFontExperiment.Enabled) return snapshot;
-        bool reported = HasReportedFont(snapshot);
+        int sampleEnd = Math.Clamp(snapshot.SelectionEnd, 0, snapshot.Text.Length);
+        string sample = snapshot.Text.Substring(Math.Max(0, sampleEnd - 8), Math.Min(8, sampleEnd));
+        var fontChoice = PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic, sample);
+        bool reported = HasReportedFont(snapshot) && !fontChoice.Substituted;
         // Retain the user's accepted omnibox fallback and exact native contract.
         if (snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal) || snapshot.AutomationIdentity.Length == 0) return snapshot;
         string context = $"{generation}:{snapshot.Foreground}:{snapshot.Editor}:{snapshot.AutomationIdentity}:{snapshot.Dpi}:" +
-            $"{snapshot.Caret.Bottom-snapshot.Caret.Top}:{snapshot.FontFamilyName}:{snapshot.FontWeightValue}:{snapshot.FontItalic}:{snapshot.FontSizeDip}";
+            $"{snapshot.Caret.Bottom-snapshot.Caret.Top}:{snapshot.FontFamilyName}:{snapshot.FontWeightValue}:{snapshot.FontItalic}:{snapshot.FontSizeDip}:{fontChoice.Used}:{fontChoice.Reason}";
         if (context != _context || _revision != RangeFontExperiment.Revision)
         {
             _context = context; _revision = RangeFontExperiment.Revision;
@@ -79,8 +83,9 @@ internal sealed class UiaRangeFont
             { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 6; return snapshot; }
             var shorter = Read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
             if (shorter == null) { SetStatus("Короткий контрольный диапазон недоступен"); return snapshot; }
+            fontChoice = PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic, longer.Value.Text);
             double size = Estimate(longer.Value.Text, longer.Value.Bounds, shorter.Value.Text, shorter.Value.Bounds,
-                snapshot.Dpi, snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic);
+                snapshot.Dpi, fontChoice.Used, snapshot.FontWeightValue, snapshot.FontItalic);
             if (size == 0) { SetStatus("Границы диапазонов не подтверждают размер; сохранён fallback"); return snapshot; }
             if (reported)
             {
@@ -95,7 +100,7 @@ internal sealed class UiaRangeFont
                 { _attempts = 6; SetStatus("Проверка метрик медленная; исходный шрифт сохранён"); return snapshot; }
                 var middle = Read(caret, 3);
                 double check = middle == null ? 0 : Estimate(longer.Value.Text, longer.Value.Bounds,
-                    middle.Value.Text, middle.Value.Bounds, snapshot.Dpi, snapshot.FontFamilyName,
+                    middle.Value.Text, middle.Value.Bounds, snapshot.Dpi, fontChoice.Used,
                     snapshot.FontWeightValue, snapshot.FontItalic);
                 if (!ShouldCorrectReported(snapshot.FontSizeDip, size, check))
                 { SetStatus($"reportedDip={snapshot.FontSizeDip:F2}; rangeDip={size:F2}; checkDip={check:F2}; расхождение не подтверждено"); return snapshot; }
@@ -112,7 +117,7 @@ internal sealed class UiaRangeFont
         {
             _lastMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             PerformanceDiagnostics.Observe("range-font", _lastMs);
-            string report = $"поле={snapshot.Editor.ToInt64():X}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/6; cached={_stable > 0}";
+            string report = $"поле={snapshot.Editor.ToInt64():X}; requestedFamily={fontChoice.Requested}; usedFamily={fontChoice.Used}; fallbackReason={fontChoice.Reason}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/6; cached={_stable > 0}";
             if (_lastStatus != report) { _lastStatus = report; StatusChanged?.Invoke(report); }
         }
     }
@@ -145,7 +150,8 @@ internal sealed class UiaRangeFont
 
     internal static double Width(string text, string family, int weight, bool italic, double size)
     {
-        var typeface = new Typeface(new FontFamily(family.Length == 0 ? "Segoe UI" : family),
+        var choice = PreviewFontResolver.Resolve(family, weight, italic, text);
+        var typeface = new Typeface(new FontFamily(choice.Used),
             italic ? FontStyles.Italic : FontStyles.Normal,
             FontWeight.FromOpenTypeWeight(weight is >= 100 and <= 900 ? weight : 400), FontStretches.Normal);
         return new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, size, Brushes.Black, 1).WidthIncludingTrailingWhitespace;

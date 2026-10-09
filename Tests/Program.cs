@@ -619,6 +619,18 @@ Eq(UiaRangeFont.ShouldCorrectReported(16,14,16),false,"disagreeing range estimat
 Eq(UiaRangeFont.ShouldCorrectReported(16,14,0),false,"missing third range preserves complete metadata");
 Eq(UiaRangeFont.ShouldCorrectReported(16,double.NaN,14),false,"nonfinite estimates cannot authorize correction");
 Eq(UiaRangeFont.ShouldCorrectReported(16,8,8.8),false,"unstable estimates cannot authorize correction");
+var available=PreviewFontResolver.Resolve("Segoe UI",400,false,"hello привет");
+Eq(available.Substituted,false,"available bilingual font keeps its real family");
+var missing=PreviewFontResolver.Resolve("LayoutPreview-Nonexistent-Font-123",400,false,"hello привет");
+Eq(missing.Used,"Segoe UI","missing application font selects explicit shared fallback");
+Eq(missing.Reason,"family-unavailable","diagnostics explain unavailable families");
+Eq(UiaRangeFont.HasReportedFont(reportedFont with {FontFamilyName="LayoutPreview-Nonexistent-Font-123"}),false,"size of an unavailable family is not authoritative for fallback");
+Eq(bootstrap.NeedsInitialProbe(reportedFont with {FontFamilyName="LayoutPreview-Nonexistent-Font-123"}),true,"unavailable family gets early range fitting");
+Eq(Math.Abs(UiaRangeFont.Width("ghbdtn","LayoutPreview-Nonexistent-Font-123",400,false,16)-UiaRangeFont.Width("ghbdtn",missing.Used,400,false,16))<0.001,true,"measurement and rendering choose the same fallback family");
+var composite=PreviewFontResolver.Resolve("Global User Interface",400,false,"hello привет");
+Eq(composite.Composite,true,"registered composite fonts are not mistaken for missing physical files");
+Eq(composite.Substituted,false,"registered composite family remains usable");
+Eq(PreviewFontResolver.Resolve("Segoe UI",400,false,char.ConvertFromUtf32(0x10FFFF)).Reason.StartsWith("glyphs-unavailable"),true,"missing code points trigger explicit composite fallback");
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);

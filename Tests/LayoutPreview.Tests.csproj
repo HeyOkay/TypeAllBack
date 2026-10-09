@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget></PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../Models/en.json" LogicalName="LayoutPreview.Models.en.json" />
@@ -15,6 +15,7 @@
     <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
     <Compile Include="../PreviewMetrics.cs" Link="PreviewMetrics.cs" />
     <Compile Include="../UiaRangeFont.cs" Link="UiaRangeFont.cs" />
+    <Compile Include="../PreviewFontResolver.cs" Link="PreviewFontResolver.cs" />
     <Compile Include="../PreviewTheme.cs" Link="PreviewTheme.cs" />
     <Compile Include="../NotepadEditor.cs" Link="NotepadEditor.cs" />
     <Compile Include="../TextEditor.cs" Link="TextEditor.cs" />

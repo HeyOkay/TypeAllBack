@@ -88,13 +88,8 @@ public partial class PreviewWindow : Window
         double overlayScale = VisualTreeHelper.GetDpi(this).DpiScaleY;
         _layoutScale = PreviewMetrics.OverlayScaleRatio(targetDpi, overlayScale);
 
-        if (!string.IsNullOrWhiteSpace(fontFamilyName))
-        {
-            try { PreviewText.FontFamily = new FontFamily(fontFamilyName); }
-            catch (Exception error) when (error is ArgumentException or FormatException)
-            { PreviewText.FontFamily = SystemFonts.MessageFontFamily; }
-        }
-        else if (animateFirstAppearance) PreviewText.FontFamily = SystemFonts.MessageFontFamily;
+        var fontChoice = PreviewFontResolver.Resolve(fontFamilyName, fontWeight, fontItalic, text);
+        PreviewText.FontFamily = new FontFamily(fontChoice.Used);
         if (animateFirstAppearance || fontSource.Length > 0)
         {
             PreviewText.FontWeight = FontWeight.FromOpenTypeWeight(fontWeight is >= 100 and <= 900 ? fontWeight : 400);
@@ -146,7 +141,7 @@ public partial class PreviewWindow : Window
 
         Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, windowLeftPx, windowTopPx, 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
-        string fontDiagnostic = $"source={fontSource} sizeBasis={(PreviewMetrics.NeedsOmniboxFallback(fontSource, fontSizeDip) ? "Chromium-desktop-default-14dip" : "font-metadata-or-geometry")} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
+        string fontDiagnostic = $"source={fontSource} sizeBasis={(PreviewMetrics.NeedsOmniboxFallback(fontSource, fontSizeDip) ? "Chromium-desktop-default-14dip" : "font-metadata-or-geometry")} reportedFamily={fontFamilyName} usedFamily={fontChoice.Used} fallbackReason={fontChoice.Reason} fontKind={(fontChoice.Composite ? "composite" : "physical")} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
         if (animateFirstAppearance || fontDiagnostic != _lastFontDiagnostic)
         {
             Trace.WriteLine("Font metrics: " + fontDiagnostic);
