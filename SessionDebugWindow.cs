@@ -30,6 +30,7 @@ internal sealed class SessionDebugWindow : Window
     };
     private readonly CheckBox _follow = new() { Content = "Следить за событиями", IsChecked = true };
     private readonly CheckBox _pause = new() { Content = "Пауза просмотра" };
+    private readonly CheckBox _inputOnly = new() { Content = "Только ввод и границы сессий", Margin = new Thickness(0, 0, 0, 6) };
     private SessionDiagnosticFrame? _shown;
     private long _historyRevision = -1;
     private string _shownBoundaries = "";
@@ -100,8 +101,13 @@ internal sealed class SessionDebugWindow : Window
         var events = new Grid();
         events.RowDefinitions.Add(new() { Height = GridLength.Auto });
         events.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        events.Children.Add(new TextBlock { Text = "События и причины · последние 200 · выделение → Ctrl+C", FontWeight = FontWeights.SemiBold,
+        var eventHeader = new StackPanel();
+        eventHeader.Children.Add(new TextBlock { Text = "События и причины · последние 200 · выделение → Ctrl+C", FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 6) });
+        eventHeader.Children.Add(_inputOnly);
+        _inputOnly.Checked += (_, _) => { _historyRevision = -1; Refresh(); };
+        _inputOnly.Unchecked += (_, _) => { _historyRevision = -1; Refresh(); };
+        events.Children.Add(eventHeader);
         Grid.SetRow(_history, 1); events.Children.Add(_history); Grid.SetRow(events, 3); root.Children.Add(events);
         var footer = new TextBlock { Text = "Правила начала доступны в отдельном списке выше. Лимит 10 слов — следующий этап.\n" +
             "Закрытие скрывает окно; утилита продолжает работать. Пауза останавливает только просмотр.",
@@ -145,7 +151,9 @@ internal sealed class SessionDebugWindow : Window
         // Keep the visible log stable until focus returns to the editor/another control.
         if (_historyRevision == _diagnostics.Revision || _history.IsKeyboardFocusWithin || _history.IsMouseCaptureWithin) return;
         _historyRevision = _diagnostics.Revision;
-        RenderHistory(_diagnostics.Events.ToArray());
+        var entries = _diagnostics.Events.ToArray();
+        if (_inputOnly.IsChecked == true) entries = entries.Where(entry => SessionInputLog.IncludedInInputFilter(entry.Kind)).ToArray();
+        RenderHistory(entries);
     }
 
     private void RenderHistory(SessionDiagnosticEvent[] events)

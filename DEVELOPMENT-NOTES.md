@@ -1,5 +1,15 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user approved a memory-only per-input log: physical sequence tN,
+  visible whitespace/edit keys, projected session text, real calculated hint in
+  brackets and distinct editor confirmation. Never calculate a new hint merely
+  for diagnostics or present an old hint as current. Deferred startup keys are
+  logged only after an editable field confirms the captured batch. Session end
+  rows include last tracked input, confirmed/projected text and triggering key
+  sequence when available. Added a view-only input/boundary filter. Preserve
+  accepted-guard reset behavior when wrapping ProcessKey for instrumentation.
+
+
 - 2026-10-10: user observed a session end during ordinary typing in ChatGPT Desktop,
   with no deliberate focus change: "editor unavailable ... focus stability". Fixed a
   concrete grace-period bug: count 1200 ms of continuous unavailable reads from the

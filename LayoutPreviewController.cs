@@ -7,6 +7,19 @@ public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
     private readonly SessionDiagnostics _diagnostics = new();
+    private SessionInputLog? _inputLog;
+    private SessionInputLog InputLog => _inputLog ??= new SessionInputLog(_diagnostics);
+    private CapturedKeyboardInput? _processingDiagnosticInput;
+    private readonly List<long> _deferredDiagnosticSequences = [];
+
+    private void EndDiagnosticSession(string reason)
+    {
+        var frame = CaptureDiagnostics();
+        string detail = InputLog.EndDescription(frame);
+        if (_processingDiagnosticInput is { } input)
+            detail += $"; событие, вызвавшее переход: t{input.Sequence} (VK {input.Data.vkCode:X2})";
+        _diagnostics.End(reason, frame, detail);
+    }
     private readonly EditorAvailability _editorAvailability = new();
     private readonly SessionStartRules _startRules = new();
     private SessionStartRuleId? _lastDeniedRule;
@@ -65,7 +78,8 @@ public sealed class LayoutPreviewController : IDisposable
 
     private void BeginDiagnosticSession(string reason, int offset)
     {
-        _diagnostics.End("Новая сессия заменила предыдущую: " + reason, CaptureDiagnostics());
+        EndDiagnosticSession("Новая сессия заменила предыдущую: " + reason);
+        InputLog.Start();
         _editorAvailability.Reset();
         _debugConfirmed = ""; _debugState = "Ожидание подтверждения";
         _diagnostics.Start(reason, offset);
@@ -94,6 +108,7 @@ public sealed class LayoutPreviewController : IDisposable
     {
         _debugConfirmed = _session?.Source ?? "";
         _debugState = "Текст подтверждён";
+        InputLog.Confirmed(_debugConfirmed);
     }
     private readonly AcceptedInputGuard _acceptedInput = new();
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -165,6 +180,32 @@ public sealed class LayoutPreviewController : IDisposable
     }
     private IntPtr ProcessKey(CapturedKeyboardInput input)
     {
+        bool record = input.Message is Native.WM_KEYDOWN or Native.WM_SYSKEYDOWN &&
+            input.Sequence > _rulesChangedSequence && !input.Control && !input.Alt && !input.Win &&
+            input.Data.vkCode is not (0x10 or 0xA0 or 0xA1 or 0x11 or 0xA2 or 0xA3 or 0x12 or 0xA4 or 0xA5 or 0x5B or 0x5C) &&
+            ((input.Data.flags & Native.LLKHF_INJECTED) == 0 || _testInput) &&
+            input.Data.dwExtraInfo != Native.LayoutPreviewInput;
+        _processingDiagnosticInput = record ? input : null;
+        try
+        {
+            var result = ProcessKeyCore(input);
+            // Only log text belonging to an actual session, not arbitrary global keys.
+            if (record && _session != null && !_accepting)
+            {
+                var frame = CaptureDiagnostics();
+                var layout = _session.SourceLayout;
+                if (input.Snapshot != null && TryLayout(input.Snapshot.Layout, out var capturedLayout)) layout = capturedLayout;
+                InputLog.Captured(input.Sequence,
+                    SessionInputLog.Describe(new(input.Data.vkCode, input.Shift, input.CapsLock), layout),
+                    frame!.Expected, _debugConfirmed);
+            }
+            return result;
+        }
+        finally { _processingDiagnosticInput = null; }
+    }
+
+    private IntPtr ProcessKeyCore(CapturedKeyboardInput input)
+    {
         var data = input.Data;
         int message = input.Message;
         _capturedCapsLock = input.CapsLock;
@@ -217,7 +258,7 @@ public sealed class LayoutPreviewController : IDisposable
                 _selectAllEditor = null;
                 _pendingInputs.Clear();
                 ClearDeferredStartup();
-                _diagnostics.End("Ctrl+A и Backspace удалили диапазон сессии", CaptureDiagnostics());
+                EndDiagnosticSession("Ctrl+A и Backspace удалили диапазон сессии");
                 _debugConfirmed = "";
                 _session = null; _editor = null; _targetLayout = IntPtr.Zero;
                 _uiaStartupUnconfirmed = false; _visible = false;
@@ -470,6 +511,7 @@ public sealed class LayoutPreviewController : IDisposable
         _lastVerifiedSource = _session.Source;
         ConfirmDiagnosticText();
         _editor = current with { Text = "" }; string text = _session.Preview;
+        InputLog.Calculated(_session.Source, text);
         string previewDiagnostic = $"layout={_session.SourceLayout} chars={_session.Source.Length} hintLength={text.Length} selection={current.SelectionStart},{current.SelectionEnd} caretHeight={current.Caret.Bottom - current.Caret.Top}";
         if (previewDiagnostic != _lastPreviewDiagnostic)
         {
@@ -609,6 +651,7 @@ public sealed class LayoutPreviewController : IDisposable
         }
         if (_deferredStartupInputs.Count >= 64) { ClearDeferredStartup(); return false; }
         _deferredStartupInputs.Add(new QueuedInput(data.vkCode, shift, capsLock, layout));
+        _deferredDiagnosticSequences.Add(_processingDiagnosticInput?.Sequence ?? _processedSequence);
         _deferredStartupUntil = now + 800;
         _deferredStartupWatch.Start();
         return true;
@@ -653,6 +696,15 @@ public sealed class LayoutPreviewController : IDisposable
 
         BeginDiagnosticSession("Захваченный ввод подтверждён первым снимком", start);
         _session = session;
+        // Delayed startup is logged only after a real editable field confirms it.
+        string diagnosticPrefix = "";
+        for (int i = 0; i < _deferredStartupInputs.Count; i++)
+        {
+            var key = _deferredStartupInputs[i];
+            KeyboardConversion.TryConvert(new(key.VirtualKey, key.Shift, key.CapsLock), key.Layout, out var c);
+            diagnosticPrefix += c;
+            InputLog.Captured(_deferredDiagnosticSequences[i], SessionInputLog.Visible(c.ToString()), diagnosticPrefix, "");
+        }
         ConfirmDiagnosticText();
         _editor = snapshot with { Text = "" };
         _targetLayout = FindLayout(session.TargetLayout);
@@ -667,6 +719,7 @@ public sealed class LayoutPreviewController : IDisposable
     private void ClearDeferredStartup()
     {
         _deferredStartupInputs.Clear();
+        _deferredDiagnosticSequences.Clear();
         _deferredStartupUntil = 0;
         _deferredStartupForeground = IntPtr.Zero;
         _deferredStartupThread = 0;
@@ -746,7 +799,7 @@ public sealed class LayoutPreviewController : IDisposable
     }
     private void Reset(string reason = "Сброс состояния", [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        _diagnostics.End(reason + $" ({caller})", CaptureDiagnostics());
+        EndDiagnosticSession(reason + $" ({caller})");
         _editorAvailability.Reset();
         _debugConfirmed = "";
         _lastVerifiedRevision = -1;
@@ -756,7 +809,7 @@ public sealed class LayoutPreviewController : IDisposable
         _selectAllEditor = null;
         _acceptedBackspacePending = false;
         Trace.WriteLine($"Session reset: {caller} start={_session?.Start} chars={_session?.Source.Length} queued={_pendingInputs.Count} startup={_deferredStartupInputs.Count}"); ClearDeferredStartup(); _lastPreview = ""; _pendingUntil = 0; _pendingInputs.Clear(); _generation++; _session = null; _editor = null; _targetLayout = IntPtr.Zero; _visible = false; _hasAppeared = false;
-        if (caller is "Dispose" or "ProcessKey") { _acceptedInput.Disarm(); _acceptedEditor = null; }
+        if (caller is "Dispose" or "ProcessKeyCore") { _acceptedInput.Disarm(); _acceptedEditor = null; }
         if (!_disposed && _acceptedInput.IsArmed && _acceptedEditor != null) _watch.Start(); else _watch.Stop();
         _preview.HidePreview();
     }

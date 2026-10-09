@@ -31,12 +31,12 @@ internal sealed class SessionDiagnostics
         Event("Начало", reason + $"; смещение {offset}");
     }
 
-    public void End(string reason, SessionDiagnosticFrame? final)
+    public void End(string reason, SessionDiagnosticFrame? final, string detail = "")
     {
         if (!Active) return;
         LastSession = final;
         LastEndReason = $"{DateTime.Now:HH:mm:ss.fff} — #{SessionId}: {reason}";
-        Event("Окончание", reason);
+        Event("Окончание", string.IsNullOrEmpty(detail) ? reason : reason + "; " + detail);
         Active = false;
     }
 

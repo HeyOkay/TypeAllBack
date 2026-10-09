@@ -7,6 +7,7 @@
     <Compile Include="../LanguagePlausibility.cs" Link="LanguagePlausibility.cs" />
     <Compile Include="../InputSession.cs" Link="InputSession.cs" />
     <Compile Include="../SessionDiagnostics.cs" Link="SessionDiagnostics.cs" />
+    <Compile Include="../SessionInputLog.cs" Link="SessionInputLog.cs" />
     <Compile Include="../SessionStartRules.cs" Link="SessionStartRules.cs" />
     <Compile Include="../AcceptDiagnosticListener.cs" Link="AcceptDiagnosticListener.cs" />
     <Compile Include="../AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
