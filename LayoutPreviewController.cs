@@ -158,9 +158,12 @@ public sealed class LayoutPreviewController : IDisposable
             UpdatePreview();
         }, DispatcherPriority.Background);
     }
+    private void OnPreviewThemeChanged(string theme) => Diagnostic("Оформление", theme);
     public void Start()
     {
         Trace.Listeners.Add(_acceptDiagnostics);
+        _preview.ThemeChanged += OnPreviewThemeChanged;
+        Diagnostic("Оформление", _preview.ThemeDescription);
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
         _preview.AcceptRequested += (_, _) => { _acceptSource = "Мышь"; AcceptPreview(); };
@@ -820,6 +823,7 @@ public sealed class LayoutPreviewController : IDisposable
     }
     public void Dispose()
     {
+        _preview.ThemeChanged -= OnPreviewThemeChanged;
         _startRules.Changed -= OnStartRuleChanged;
         TextEditor.SnapshotChanged -= OnSnapshotChanged;
         _disposed = true; Reset("Утилита остановлена");

@@ -13,6 +13,30 @@ namespace LayoutPreviewPrototype;
 public partial class PreviewWindow : Window
 {
     public event EventHandler? AcceptRequested;
+    internal event Action<string>? ThemeChanged;
+    private readonly WindowsPreviewTheme _theme;
+    internal string ThemeDescription { get; private set; } = "Тема ещё не определена";
+
+    private void ApplyTheme(PreviewThemePalette palette)
+    {
+        static SolidColorBrush Brush(Color color) { var brush = new SolidColorBrush(color); brush.Freeze(); return brush; }
+        PreviewBorder.Background = Brush(palette.Background);
+        PreviewBorder.BorderBrush = Brush(palette.Border);
+        PreviewText.Foreground = Brush(palette.Text);
+        ThemeDescription = palette.Mode switch
+        {
+            PreviewThemeMode.Light => "Светлая тема Windows",
+            PreviewThemeMode.Dark => "Тёмная тема Windows",
+            _ => "Контрастная тема Windows"
+        };
+        ThemeChanged?.Invoke(ThemeDescription);
+    }
+
+    private IntPtr ThemeMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message is 0x001A or 0x0015 or 0x031A) _theme.QueueRefresh(); // settings/colors/theme changed
+        return IntPtr.Zero;
+    }
 
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -39,9 +63,13 @@ public partial class PreviewWindow : Window
     public PreviewWindow()
     {
         InitializeComponent();
+        _theme = new WindowsPreviewTheme(Dispatcher, ApplyTheme);
+        Closed += (_, _) => _theme.Dispose();
         SourceInitialized += (_, _) =>
         {
             _hwnd = new WindowInteropHelper(this).Handle;
+            HwndSource.FromHwnd(_hwnd)?.AddHook(ThemeMessage);
+            _theme.RefreshNow();
             var ex = Native.GetWindowLong(_hwnd, GWL_EXSTYLE);
             Native.SetWindowLong(_hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
         };

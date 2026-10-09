@@ -1,5 +1,21 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user asked for system theme detection because the dark popup does not
+  suit light Windows, and asked whether Mica can be used. Preview now follows the
+  Windows app light/dark preference (shell preference fallback) and high-contrast
+  system colors. Preference/theme broadcasts coalesce onto WPF, with no per-key
+  registry reads or polling. Colors update without rerendering text or restarting
+  sessions; static subscriptions are released on close. Dark appearance is retained;
+  light mode uses an opaque light background and dark readable text.
+- Mica was researched, not applied: Microsoft describes it as a long-lived app
+  backdrop, with solid fallback when inactive. Our no-activate layered popup has
+  transparent animation reserve; a real backdrop experiment would require changing
+  the window/composition rather than assigning Mica to PreviewBorder. Sources:
+  https://learn.microsoft.com/en-us/windows/apps/design/style/mica
+  https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwm_systembackdrop_type
+  User retains manual runtime verification of both Windows themes.
+
+
 - 2026-10-10: user reported Notepad typing "руддщ ьк" with a session ending at t75
   before that character was confirmed: "window or field changed". Found a concrete
   backend-switch path: failed native geometry/format consistency could fall through

@@ -518,4 +518,27 @@ Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { 
 Eq(EditorContextDiagnostics.Changed(nativeForGeometry, nativeForGeometry with { Thread = 77 }), "поток поля", "thread identity change is explicit");
 Eq(EditorContextDiagnostics.Changed(backendChanged, backendChanged with { AutomationIdentity = "42.18" }), "UIA-идентификатор поля", "UIA field recreation is distinct from backend switching");
 Eq(SessionInputLog.IncludedInInputFilter("Контекст изменился"), true, "input filter retains the exact cause of context-related breaks");
+Eq(PreviewThemePalette.UseLightTheme(0, 1), false, "Windows app dark mode takes precedence over light shell mode");
+Eq(PreviewThemePalette.UseLightTheme(1, 0), true, "Windows app light mode takes precedence over dark shell mode");
+Eq(PreviewThemePalette.UseLightTheme(null, 0), false, "missing app preference falls back to Windows system preference");
+Eq(PreviewThemePalette.UseLightTheme("invalid", 1), true, "invalid app preference does not override a valid fallback");
+Eq(PreviewThemePalette.UseLightTheme(null, null), true, "missing theme preferences have a deterministic light fallback");
+var lightPalette = PreviewThemePalette.Select(true, false, default, default);
+var darkPalette = PreviewThemePalette.Select(false, false, default, default);
+Eq(lightPalette.Mode, PreviewThemeMode.Light, "light theme selects a light popup");
+Eq(darkPalette.Mode, PreviewThemeMode.Dark, "dark theme selects a dark popup");
+Eq(lightPalette.Background.A, (byte)255, "light popup background stays opaque above document text");
+Eq(darkPalette.Background.A, (byte)255, "dark popup background stays opaque above document text");
+double ThemeLuminance(System.Windows.Media.Color color)
+{
+    double Channel(byte c) { double value = c / 255.0; return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4); }
+    return 0.2126 * Channel(color.R) + 0.7152 * Channel(color.G) + 0.0722 * Channel(color.B);
+}
+Eq((ThemeLuminance(lightPalette.Background) + 0.05) / (ThemeLuminance(lightPalette.Text) + 0.05) >= 4.5, true,
+    "light popup label has readable contrast against its own opaque background");
+var highContrastPalette = PreviewThemePalette.Select(false, true, System.Windows.Media.Colors.Black, System.Windows.Media.Colors.Yellow);
+Eq(highContrastPalette.Mode, PreviewThemeMode.HighContrast, "high contrast overrides the normal light/dark palette");
+Eq(highContrastPalette.Background, System.Windows.Media.Colors.Black, "high contrast respects the selected system background");
+Eq(highContrastPalette.Text, System.Windows.Media.Colors.Yellow, "high contrast respects the selected system foreground");
+Eq(highContrastPalette.Border, highContrastPalette.Text, "high contrast border remains visible");
 Console.WriteLine($"PASS: {checks} regression checks");
