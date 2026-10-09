@@ -1,9 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget></PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../Models/en.json" LogicalName="LayoutPreview.Models.en.json" />
+    <EmbeddedResource Include="../Models/ru.json" LogicalName="LayoutPreview.Models.ru.json" />
     <Compile Include="../KeyboardConversion.cs" Link="KeyboardConversion.cs" />
+    <Compile Include="../LanguagePlausibility.cs" Link="LanguagePlausibility.cs" />
     <Compile Include="../InputSession.cs" Link="InputSession.cs" />
+    <Compile Include="../AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
     <Compile Include="../Native.cs" Link="Native.cs" />
+    <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
+    <Compile Include="../PreviewMetrics.cs" Link="PreviewMetrics.cs" />
     <Compile Include="../NotepadEditor.cs" Link="NotepadEditor.cs" />
+    <Compile Include="../TextEditor.cs" Link="TextEditor.cs" />
+    <Compile Include="../UiaTextEditor.cs" Link="UiaTextEditor.cs" />
+    <Compile Include="../EditorPolling.cs" Link="EditorPolling.cs" />
+    <Compile Include="../PerformanceDiagnostics.cs" Link="PerformanceDiagnostics.cs" />
+    <Compile Include="../ShellSearchResolver.cs" Link="ShellSearchResolver.cs" />
   </ItemGroup>
 </Project>

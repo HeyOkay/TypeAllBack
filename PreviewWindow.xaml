@@ -14,13 +14,13 @@
     <Canvas x:Name="RootCanvas" Width="340" Height="44" ClipToBounds="False">
         <Border x:Name="PreviewBorder"
                 Canvas.Left="170" Canvas.Top="4"
-                Padding="7,2,7,3"
+                Padding="4,2,4,3"
                 Cursor="Hand"
                 MouseLeftButtonDown="PreviewBorder_MouseLeftButtonDown"
                 CornerRadius="6"
                 BorderThickness="1"
                 BorderBrush="#669A9A9A"
-                Background="#16000000"
+                Background="#FF333333"
                 Opacity="0"
                 RenderTransformOrigin="0,0.5"
                 SnapsToDevicePixels="True">
@@ -32,9 +32,9 @@
             </Border.RenderTransform>
             <TextBlock x:Name="PreviewText"
                        Text="Привет"
-                       FontFamily="Segoe UI"
+                       FontFamily="Consolas"
                        FontSize="15"
-                       Foreground="#A89A9A9A"
+                       Foreground="#CF9A9A9A"
                        TextOptions.TextFormattingMode="Display"
                        TextOptions.TextRenderingMode="ClearType"/>
         </Border>

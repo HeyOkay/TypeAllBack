@@ -1,0 +1,92 @@
+[
+  {
+    "language": "en",
+    "prefixCharacters": 3,
+    "samples": 1665,
+    "falsePositives": 0,
+    "detected": 1040,
+    "falsePositivePercent": 0,
+    "detectionPercent": 62.46
+  },
+  {
+    "language": "en",
+    "prefixCharacters": 5,
+    "samples": 1665,
+    "falsePositives": 1,
+    "detected": 1571,
+    "falsePositivePercent": 0.06,
+    "detectionPercent": 94.35
+  },
+  {
+    "language": "en",
+    "prefixCharacters": 10,
+    "samples": 1665,
+    "falsePositives": 0,
+    "detected": 1643,
+    "falsePositivePercent": 0,
+    "detectionPercent": 98.68
+  },
+  {
+    "language": "en",
+    "prefixCharacters": 20,
+    "samples": 1518,
+    "falsePositives": 0,
+    "detected": 1512,
+    "falsePositivePercent": 0,
+    "detectionPercent": 99.6
+  },
+  {
+    "language": "en",
+    "prefixCharacters": 160,
+    "samples": 1665,
+    "falsePositives": 0,
+    "detected": 1662,
+    "falsePositivePercent": 0,
+    "detectionPercent": 99.82
+  },
+  {
+    "language": "ru",
+    "prefixCharacters": 3,
+    "samples": 512,
+    "falsePositives": 1,
+    "detected": 279,
+    "falsePositivePercent": 0.2,
+    "detectionPercent": 54.49
+  },
+  {
+    "language": "ru",
+    "prefixCharacters": 5,
+    "samples": 512,
+    "falsePositives": 1,
+    "detected": 480,
+    "falsePositivePercent": 0.2,
+    "detectionPercent": 93.75
+  },
+  {
+    "language": "ru",
+    "prefixCharacters": 10,
+    "samples": 512,
+    "falsePositives": 0,
+    "detected": 501,
+    "falsePositivePercent": 0,
+    "detectionPercent": 97.85
+  },
+  {
+    "language": "ru",
+    "prefixCharacters": 20,
+    "samples": 505,
+    "falsePositives": 0,
+    "detected": 503,
+    "falsePositivePercent": 0,
+    "detectionPercent": 99.6
+  },
+  {
+    "language": "ru",
+    "prefixCharacters": 160,
+    "samples": 512,
+    "falsePositives": 0,
+    "detected": 512,
+    "falsePositivePercent": 0,
+    "detectionPercent": 100
+  }
+]

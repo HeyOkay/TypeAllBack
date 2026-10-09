@@ -1,13 +1,55 @@
 using LayoutPreviewPrototype;
 using System.Runtime.InteropServices;
 using System.Text;
+if (args.Contains("--shell-discovery-smoke"))
+{
+    ShellDiscoverySmokeTests.Run();
+    return;
+}
+if (args.Contains("--native-font-smoke"))
+{
+    NativeFontSmokeTests.Run();
+    return;
+}
+if (args.Contains("--hook-pump-smoke"))
+{
+    using var pump = new KeyboardHookPump(_ => { }, false);
+    pump.Start();
+    if (!pump.IsRunning || pump.ThreadId == Native.GetCurrentThreadId())
+        throw new Exception("Keyboard hook is not running on its independent thread");
+    pump.Dispose();
+    if (pump.IsRunning) throw new Exception("Keyboard hook message pump did not stop");
+    Console.WriteLine("PASS: independent Windows hook thread startup and shutdown (no injected input)");
+    return;
+}
+if (args.Contains("--uia-smoke"))
+{
+    UiaSmokeTests.Run();
+    return;
+}
+if (args.Contains("--editor-probe"))
+{
+    TextEditor.Start();
+    Thread.Sleep(600);
+    Console.WriteLine(Task.Run(UiaTextEditor.DescribeFocusedElement).GetAwaiter().GetResult());
+    Console.WriteLine(TextEditor.TryRead(out var focused) ? $"Editor=OK UIA={focused.AutomationIdentity.Length > 0} length={focused.Text.Length} selection={focused.SelectionStart},{focused.SelectionEnd} caretHeight={focused.Caret.Bottom-focused.Caret.Top}" : "Editor=UNSUPPORTED");
+    TextEditor.Stop();
+    return;
+}
+if (args.Length == 3 && args[0] == "--corpus")
+{
+    CorpusEvaluation.Run(args[1], args[2]);
+    return;
+}
 if (args.Contains("--probe"))
 {
+    if (args.Contains("--delay")) Thread.Sleep(8000);
     var fg = Native.GetForegroundWindow(); var thread = Native.GetWindowThreadProcessId(fg, out uint pid);
     var info = new Native.GUITHREADINFO { cbSize = Marshal.SizeOf<Native.GUITHREADINFO>() }; Native.GetGUIThreadInfo(thread, ref info);
     var cls = new StringBuilder(256); Native.GetClassName(info.hwndFocus, cls, 256);
-    Console.WriteLine($"PID={pid} class={cls} flags={info.flags} layout=0x{Native.GetKeyboardLayout(thread).ToInt64():X} caretHeight={info.rcCaret.Bottom-info.rcCaret.Top}");
-    Console.WriteLine(NotepadEditor.TryRead(out var snapshot) ? $"Adapter=OK length={snapshot.Text.Length} selection={snapshot.SelectionStart},{snapshot.SelectionEnd} dpi={snapshot.Dpi}" : "Adapter=UNSUPPORTED");
+    Console.WriteLine($"PID={pid} class={cls} flags={info.flags} layout=0x{Native.GetKeyboardLayout(thread).ToInt64():X} caretHeight={info.rcCaret.Bottom-info.rcCaret.Top} caretHandle={info.hwndCaret}");
+    Console.WriteLine(NotepadEditor.TryRead(out var snapshot) ? $"Adapter=OK length={snapshot.Text.Length} selection={snapshot.SelectionStart},{snapshot.SelectionEnd} dpi={snapshot.Dpi} editorThread={snapshot.Thread} editorLayout=0x{snapshot.Layout.ToInt64():X}" : "Adapter=UNSUPPORTED");
+    if (snapshot != null) Console.WriteLine(NotepadEditor.TryGetCaret(snapshot, out var caret) ? $"Caret=OK {caret.Left},{caret.Top},{caret.Right},{caret.Bottom}" : "Caret=UNAVAILABLE");
     return;
 }
 int checks = 0;
@@ -41,14 +83,17 @@ void Type(string keys, KeyboardLayout layout)
         Eq(session.Matches(document,session.End,session.End),true,"pre append context");
         var key=Us(c); int end=session.End; session.Append(key,layout,document);
         KeyboardConversion.TryConvert(key,layout,out var source); document=document.Insert(end,source.ToString());
-        Eq(session.Matches(document,session.End,session.End),true,"post append context");
+Eq(session.Matches(document,session.End,session.End),true,"post append context");
     }
 }
 Type("ghbdtn ",KeyboardLayout.English);
+Eq(session.MatchesDocument(document),true,"session document matches while selection can change");
+Eq(session.Matches(document,0,document.Length),false,"selection cannot be accepted");
+Eq(session.MatchesDocument(document),true,"Ctrl+A selection preserves session document");
 Eq(session.Preview,"привет","space retains preview"); Eq(session.Replacement,"привет ","sentence replacement");
 Type("vbh",KeyboardLayout.Russian);
 Eq(session.Replacement,"привет мир","correct segment unchanged"); Eq(session.Segments.Count,2,"layout segments");
-Eq(session.Preview,"","correct last segment has no accept preview");
+Eq(session.Preview,"привет","earlier wrong segment remains actionable");
 Type(" pf,e[fk",KeyboardLayout.English);
 Eq(session.Preview,"забухал","latest word"); Eq(session.Replacement,"привет мир забухал","mixed segments");
 Eq(session.Start,initial,"old text outside range");
@@ -59,4 +104,303 @@ int before=session.End; Eq(session.Backspace(document),true,"backspace"); docume
 Eq(session.Preview,"забуха","backspace preview"); Eq(session.Matches(document,session.End,session.End),true,"backspace context");
 var empty = new InputSession("old",3,KeyboardLayout.English); Eq(empty.Backspace("old"),false,"cannot delete pre session");
 Eq(Marshal.SizeOf<Native.INPUT>(),40,"x64 INPUT ABI");
+Eq(NotepadEditor.NormalizeText("old\r\nline\r\n", "RichEditD2DPT"), "old\rline\r", "RichEdit positions");
+Eq(NotepadEditor.NormalizeText("old\r\nline", "Edit"), "old\r\nline", "legacy Edit positions");
+var multiline = new InputSession("old\rline\r",9,KeyboardLayout.English);
+multiline.Append(Us('p'),KeyboardLayout.English,"old\rline\r");
+Eq(multiline.Matches("old\rline\rp",10,10),true,"session after multiple paragraphs");
+Eq(multiline.Replacement,"з","multiline conversion");
+var correctlyTypedEnglish = new InputSession("",0,KeyboardLayout.English);
+string englishDocument = "";
+foreach (char c in "hello") { int end=correctlyTypedEnglish.End; var key=Us(c); correctlyTypedEnglish.Append(key,KeyboardLayout.English,englishDocument); KeyboardConversion.TryConvert(key,KeyboardLayout.English,out var typed); englishDocument=englishDocument.Insert(end,typed.ToString()); }
+Eq(correctlyTypedEnglish.Preview,"","correct English stays quiet");
+var wrongEnglishLayout = new InputSession("",0,KeyboardLayout.English);
+string wrongEnglishDocument = "";
+foreach (char c in "ghbdtn") { int end=wrongEnglishLayout.End; var key=Us(c); wrongEnglishLayout.Append(key,KeyboardLayout.English,wrongEnglishDocument); KeyboardConversion.TryConvert(key,KeyboardLayout.English,out var typed); wrongEnglishDocument=wrongEnglishDocument.Insert(end,typed.ToString()); }
+Eq(wrongEnglishLayout.Preview,"привет","obvious Russian alternative is suggested");
+var correctlyTypedRussian = new InputSession("",0,KeyboardLayout.Russian);
+string russianDocument = "";
+foreach (char c in "ghbdtn") { int end=correctlyTypedRussian.End; var key=Us(c); correctlyTypedRussian.Append(key,KeyboardLayout.Russian,russianDocument); KeyboardConversion.TryConvert(key,KeyboardLayout.Russian,out var typed); russianDocument=russianDocument.Insert(end,typed.ToString()); }
+Eq(correctlyTypedRussian.Preview,"","correct Russian stays quiet");
+var wrongRussianLayout = new InputSession("",0,KeyboardLayout.Russian);
+string wrongRussianDocument = "";
+foreach (char c in "hello") { int end=wrongRussianLayout.End; var key=Us(c); wrongRussianLayout.Append(key,KeyboardLayout.Russian,wrongRussianDocument); KeyboardConversion.TryConvert(key,KeyboardLayout.Russian,out var typed); wrongRussianDocument=wrongRussianDocument.Insert(end,typed.ToString()); }
+Eq(wrongRussianDocument,"руддщ","Russian layout produces the expected wrong-layout text");
+Eq(wrongRussianLayout.Preview,"hello","obvious English alternative from Russian is suggested");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("ghbdtn rfr ltkf","привет как дела",KeyboardLayout.English),true,"whole session supports Russian alternative");
+Eq(LanguagePlausibility.IsClearlyMorePlausible("the quick brown fox","еур йгшсл игщты ашч",KeyboardLayout.English),false,"whole correct English session stays quiet");
+var guard = new AcceptedInputGuard();
+string accepted = "Старое. Привет";
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+var space = new PhysicalKey(0x20,false,false);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,space,false),true,"accepted session suppresses following space");
+accepted += " ";
+var ruM = new PhysicalKey(0x42,false,false);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,ruM,false),true,"accepted session suppresses next word first letter");
+KeyboardConversion.TryConvert(ruM,KeyboardLayout.Russian,out var ruMCharacter);
+accepted += ruMCharacter;
+var ruI = new PhysicalKey(0x44,false,false);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,ruI,false),true,"accepted session suppresses next word continuation");
+KeyboardConversion.TryConvert(ruI,KeyboardLayout.Russian,out var ruICharacter);
+accepted += ruICharacter;
+Eq(guard.ShouldSuppress(accepted,accepted.Length-1,accepted.Length-1,KeyboardLayout.Russian,ruI,false),true,"mouse caret move keeps accepted guard");
+Eq(guard.IsArmed,true,"mouse caret move preserves guard");
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.English,Us('g'),false),false,"manual layout change rearms previews");
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,space,true),false,"explicit new line rearms previews");
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,new PhysicalKey(0x08,false,false),false),true,"backspace keeps accepted guard armed");
+accepted=accepted.Remove(accepted.Length-1,1);
+Eq(guard.ShouldSuppress(accepted,accepted.Length,accepted.Length,KeyboardLayout.Russian,ruM,false),true,"typing after Backspace stays suppressed");
+KeyboardConversion.TryConvert(ruM,KeyboardLayout.Russian,out ruMCharacter);
+accepted=accepted.Insert(accepted.Length,ruMCharacter.ToString());
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+Eq(guard.ShouldSuppress(accepted,0,accepted.Length,KeyboardLayout.Russian,new PhysicalKey(0x08,false,false),false),true,"Ctrl+A then Backspace keeps accepted guard");
+accepted="";
+Eq(guard.ShouldSuppress(accepted,0,0,KeyboardLayout.Russian,ruM,false),true,"Russian typing after deleting selection stays suppressed");
+guard.Arm(accepted,accepted.Length,KeyboardLayout.Russian);
+Eq(guard.ShouldSuppress(accepted+"!",accepted.Length+1,accepted.Length+1,KeyboardLayout.Russian,ruM,false),false,"external text edit rearms previews");
+var burst = new InputSession("old",3,KeyboardLayout.English);
+var gKey = new QueuedInput(0x47,true,false,KeyboardLayout.English);
+burst.Append(new PhysicalKey(gKey.VirtualKey,gKey.Shift,gKey.CapsLock),gKey.Layout,"old");
+var burstKeys = new[]
+{
+    new QueuedInput(0x48,false,false,KeyboardLayout.English),
+    new QueuedInput(0x42,false,false,KeyboardLayout.English),
+    new QueuedInput(0x44,false,false,KeyboardLayout.English),
+    new QueuedInput(0x08,false,false,KeyboardLayout.English)
+};
+burst.ReplayPending(burstKeys);
+Eq(burst.Source,"Ghb","queued typing and Backspace stay in one session");
+Eq(burst.Reconcile("oldGhb",6,6),true,"rapid Backspace reconciles against the editor");
+Eq(burst.Preview,"При","rapid Backspace keeps the live preview");
+// A delayed first UIA snapshot must keep the pre-key boundary, including a
+// nonempty document. Failed partial snapshots must not consume early keys.
+string startupBaseline = "Старый текст. ";
+var startup = new InputSession(startupBaseline, startupBaseline.Length, KeyboardLayout.English);
+var startupKeys = "ghbdtn".Select(c => new QueuedInput(Us(c).VirtualKey, false, false, KeyboardLayout.English)).ToArray();
+var earlyStartup = startup.Copy();
+earlyStartup.ReplayPending(startupKeys);
+Eq(earlyStartup.Reconcile(startupBaseline + "ghb", startupBaseline.Length + 3, startupBaseline.Length + 3), false,
+    "partial first snapshot cannot advance the session boundary");
+Eq(startup.Source, "", "failed snapshot leaves the original startup untouched");
+var completeStartup = startup.Copy();
+completeStartup.ReplayPending(startupKeys);
+Eq(completeStartup.Reconcile(startupBaseline + "ghbdtn", startupBaseline.Length + 6, startupBaseline.Length + 6), true,
+    "delayed full first word matches original boundary");
+Eq(completeStartup.Start, startupBaseline.Length, "preexisting text remains outside startup session");
+Eq(completeStartup.Source, "ghbdtn", "first three characters are retained in startup");
+Eq(completeStartup.Replacement, "привет", "replacement covers the complete first word");
+Eq(startupBaseline + completeStartup.Replacement, "Старый текст. привет", "accept preserves prior text and converts first letter");
+Eq(UiaTextEditor.TryCanonicalDocument("Placeholder text\n", "", 16, 16, out var canonical, out var canonicalStart, out var canonicalEnd), true, "empty UIA value excludes placeholder");
+Eq(canonical, "", "placeholder is not entered document text");
+Eq(canonicalStart, 0, "placeholder caret maps to logical zero");
+Eq(canonicalEnd, 0, "placeholder selection end maps to logical zero");
+Eq(UiaTextEditor.TryCanonicalDocument("ghbdtn\n", "ghbdtn", 6, 6, out canonical, out canonicalStart, out canonicalEnd), true, "UIA implicit paragraph mark is excluded");
+Eq(canonical, "ghbdtn", "complete first word remains intact");
+Eq(UiaTextEditor.TryCanonicalDocument("line\n\n", "line\n", 5, 5, out canonical, out canonicalStart, out canonicalEnd), true, "real trailing newline remains distinct from provider suffix");
+Eq(canonical, "line\n", "user-entered newline is preserved");
+Eq(UiaTextEditor.TryCanonicalDocument("old", "new", 3, 3, out _, out _, out _), false, "inconsistent UIA value and text fail closed");
+Eq(UiaTextEditor.TryCanonicalDocument("ghbdtn\n", "ghbdtn", 7, 7, out _, out _, out _), false, "caret outside actual value is rejected");
+Eq(UiaTextEditor.TryCanonicalDocument("\n", "\n", 0, 0, out canonical, out canonicalStart, out canonicalEnd), true, "empty provider paragraph mark is supported");
+Eq(canonical, "", "empty provider paragraph mark is not baseline text");
+Eq(UiaTextEditor.TryCanonicalDocument("g\n", "g\n", 1, 1, out canonical, out _, out _), true, "paragraph mark in both UIA patterns is supported");
+Eq(canonical, "g", "first key remains the entire logical document");
+Eq(UiaTextEditor.TryCanonicalDocument("g\n", "g\n", 2, 2, out canonical, out _, out _), true, "caret after a real line break remains valid");
+Eq(canonical, "g\n", "real line break after typed text is preserved");
+var placeholderStartup = new InputSession("Provider placeholder", 20, KeyboardLayout.English);
+placeholderStartup.Append(Us('g'), KeyboardLayout.English, "Provider placeholder");
+Eq(placeholderStartup.TryRebaseUnconfirmedStartup("g", 1, 1, out var firstKeyStartup), true,
+    "first physical key replaces provider placeholder without losing the key");
+Eq(firstKeyStartup.Start, 0, "first physical key retains offset zero");
+Eq(firstKeyStartup.Source, "g", "first key remains in session source");
+foreach (char c in "hbdtn")
+{
+    string current = firstKeyStartup.Source;
+    firstKeyStartup.Append(Us(c), KeyboardLayout.English, current);
+}
+Eq(firstKeyStartup.Matches("ghbdtn", 6, 6), true, "all letters reconcile after placeholder replacement");
+Eq(firstKeyStartup.Replacement, "привет", "accept includes first letter after placeholder replacement");
+Eq(placeholderStartup.TryRebaseUnconfirmedStartup("Provider placeholderg", 21, 21, out _), false,
+    "existing text is never adopted as freshly typed input");
+Eq(placeholderStartup.TryRebaseUnconfirmedStartup("g", 0, 0, out _), false,
+    "startup rebasing refuses a moved caret");
+var middleStartup = new InputSession("old", 1, KeyboardLayout.English);
+middleStartup.Append(Us('g'), KeyboardLayout.English, "old");
+Eq(middleStartup.TryRebaseUnconfirmedStartup("g", 1, 1, out _), false,
+    "startup rebasing refuses a session begun inside preexisting text");
+var pendingPlaceholderStartup = placeholderStartup.Copy();
+pendingPlaceholderStartup.ReplayPending(startupKeys.Skip(1).ToArray());
+Eq(pendingPlaceholderStartup.TryRebaseUnconfirmedStartup("ghbdtn", 6, 6, out var rebasedPending), true,
+    "first delivery can confirm an entire queued word");
+Eq(rebasedPending.Replacement, "привет", "queued first delivery preserves every physical key");
+string heldBackspaceBaseline = "Old text stays. ";
+var heldBackspaceSession = new InputSession(heldBackspaceBaseline, heldBackspaceBaseline.Length, KeyboardLayout.English);
+var repeatedKeys = Enumerable.Repeat(new QueuedInput(0x47, false, false, KeyboardLayout.English), 100).ToArray();
+heldBackspaceSession.ReplayPending(repeatedKeys);
+Eq(heldBackspaceSession.Reconcile(heldBackspaceBaseline + new string('g', 100), heldBackspaceBaseline.Length + 100, heldBackspaceBaseline.Length + 100), true, "long typed session is confirmed before autorepeat");
+var deletionBatch = heldBackspaceSession.Copy();
+deletionBatch.ReplayPending(Enumerable.Repeat(new QueuedInput(0x08, false, false, KeyboardLayout.English), 60).ToArray());
+Eq(deletionBatch.Reconcile(heldBackspaceBaseline + new string('g', 40), heldBackspaceBaseline.Length + 40, heldBackspaceBaseline.Length + 40), true, "held Backspace reconciles an entire repeat batch");
+Eq(deletionBatch.Source.Length, 40, "all repeated native deletions remain accounted for");
+Eq(deletionBatch.Start, heldBackspaceBaseline.Length, "held Backspace preserves session boundary");
+deletionBatch.ReplayPending(Enumerable.Repeat(new QueuedInput(0x08, false, false, KeyboardLayout.English), 40).ToArray());
+Eq(deletionBatch.Reconcile(heldBackspaceBaseline, heldBackspaceBaseline.Length, heldBackspaceBaseline.Length), true, "deleting all typed characters preserves the earlier document");
+Eq(deletionBatch.Source, "", "empty session remains valid after deletion batch");
+var retypedRussian = InputSession.FromSelectionReplacement("руддщ", 0, 5, Us('h'), KeyboardLayout.Russian);
+Eq(retypedRussian.Matches("р", 1, 1), true, "first RU key replacing Ctrl+A selection is captured");
+Eq(retypedRussian.Replacement, "h", "first RU key retains its English alternative");
+string retypedDocument = "р";
+foreach (char c in "ello")
+{
+    retypedRussian.Append(Us(c), KeyboardLayout.Russian, retypedDocument);
+    KeyboardConversion.TryConvert(Us(c), KeyboardLayout.Russian, out var typedCharacter);
+    retypedDocument += typedCharacter;
+}
+Eq(retypedDocument, "руддщ", "retyping selected Russian-layout text produces all five letters");
+Eq(retypedRussian.Matches(retypedDocument, 5, 5), true, "retyped RU word matches the entire new document");
+Eq(retypedRussian.Preview, "hello", "Ctrl+A retyping keeps first preview letter");
+Eq(retypedRussian.Replacement, "hello", "accept converts every retyped letter");
+var retypedEnglish = InputSession.FromSelectionReplacement("ghbdtn", 0, 6, Us('g'), KeyboardLayout.English);
+retypedEnglish.ReplayPending(startupKeys.Skip(1).ToArray());
+Eq(retypedEnglish.Reconcile("ghbdtn", 6, 6), true, "Ctrl+A EN replacement supports rapid queued continuation");
+Eq(retypedEnglish.Replacement, "привет", "EN selected replacement retains first converted letter");
+var partialReplacement = InputSession.FromSelectionReplacement("OLD руддщ TAIL", 4, 9, Us('h'), KeyboardLayout.Russian);
+Eq(partialReplacement.Matches("OLD р TAIL", 5, 5), true, "selection replacement preserves unselected prefix and suffix");
+Eq(partialReplacement.Start, 4, "selection replacement range begins at actual first inserted character");
+Eq(partialReplacement.Matches("OLD руддщр TAIL", 10, 10), false, "failed selection prediction cannot validate appended text");
+Eq(UiaTextEditor.FontPointsToDip(12), 16.0, "UIA point font size converts to WPF DIP independently of caret height");
+Eq(UiaTextEditor.FontPointsToDip(18), 24.0, "larger text uses its declared font size");
+Eq(UiaTextEditor.FontPointsToDip(double.NaN), 0.0, "invalid UIA font size requests stable fallback");
+Eq(UiaTextEditor.FontPointsToDip(double.PositiveInfinity), 0.0, "infinite font size cannot enlarge preview");
+Eq(UiaTextEditor.FontPointsToDip(-1), 0.0, "negative font size cannot enlarge preview");
+var nativeForGeometry = new EditorSnapshot((IntPtr)1, (IntPtr)2, 3, (IntPtr)0x04090409,
+    "oldg", 4, 4, default, 96);
+var cachedGeometry = nativeForGeometry with
+{
+    Caret = new Native.RECT { Left = 120, Right = 121, Top = 50, Bottom = 70 },
+    CapturedAt = 100, FontSizeDip = 16
+};
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry, cachedGeometry, 110, out var enrichedGeometry), true,
+    "matching background geometry enriches native text without COM calls");
+Eq(enrichedGeometry.Caret.Left, 120, "native snapshot receives verified background coordinates");
+Eq(enrichedGeometry.FontSizeDip, 16.0, "native snapshot receives declared background font size");
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry with { Text = "oldh" }, cachedGeometry, 110, out _), false,
+    "background geometry from different text cannot be reused");
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry with { SelectionStart = 3, SelectionEnd = 3 }, cachedGeometry, 110, out _), false,
+    "background geometry from a different caret cannot be reused");
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry with { Dpi = 144 }, cachedGeometry, 110, out _), false,
+    "background coordinates cannot cross a DPI change");
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry, cachedGeometry, 301, out _), false,
+    "stale native geometry is rejected");
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry with { Editor = (IntPtr)9 }, cachedGeometry, 110, out _), false,
+    "another editor cannot supply native geometry");
+Eq(Marshal.SizeOf<Native.MSG>(), 48, "x64 Windows message-pump ABI");
+var acceptTicket = new KeyboardAcceptContext(nativeForGeometry, 7);
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry, 7), true, "confirmed visible preview can reserve Right on independent hook thread");
+Eq(KeyboardHookPump.CanAccept(null, nativeForGeometry, 7), false, "Right stays native without a confirmed preview");
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry, 8), false, "intervening physical key invalidates acceptance");
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry with { Text = "oldh" }, 7), false, "changed document cannot consume Right");
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry with { SelectionStart = 3, SelectionEnd = 3 }, 7), false, "moved caret cannot consume Right");
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry with { Layout = (IntPtr)0x04190419 }, 7), false, "changed layout cannot consume Right");
+Eq(KeyboardHookPump.CanAccept(acceptTicket, nativeForGeometry with { Editor = (IntPtr)9 }, 7), false, "different editor cannot consume Right");
+foreach (string supportedClass in new[] { "Edit", "RICHEDIT", "RichEdit20A", "RichEdit20W", "RICHEDIT50W", "RichEditD2DPT", "WindowsForms10.EDIT.app.0.test", "WindowsForms10.RichEdit20W.app.0.test", "WindowsForms10.RichEdit50W.app.0.test" })
+    Eq(NotepadEditor.IsSupportedClass(supportedClass), true, "native editable class " + supportedClass);
+foreach (string unsupportedClass in new[] { "Button", "MyEditCanvas", "Chrome_RenderWidgetHostHWND", "WindowsForms10.STATIC.app.0.test" })
+    Eq(NotepadEditor.IsSupportedClass(unsupportedClass), false, "unknown native class is not treated as Edit " + unsupportedClass);
+Eq(NotepadEditor.NormalizeText("a\r\nb", "WindowsForms10.EDIT.app.0.test"), "a\r\nb", "WinForms Edit uses CRLF character offsets");
+Eq(NotepadEditor.NormalizeText("a\r\nb", "RichEdit20W"), "a\rb", "legacy RichEdit uses paragraph offsets");
+Eq(UiaTextEditor.IsWritableText(false, null), true, "writable TextPattern does not require ValuePattern or Edit role");
+Eq(UiaTextEditor.IsWritableText(null, false), true, "ValuePattern can establish writability when text attribute is unsupported");
+Eq(UiaTextEditor.IsWritableText(null, null), false, "unknown writability is rejected");
+Eq(UiaTextEditor.IsWritableText(true, false), false, "readonly TextPattern cannot be bypassed by ValuePattern");
+Eq(UiaTextEditor.IsWritableText(false, true), false, "readonly ValuePattern cannot be bypassed by TextPattern");
+var fontGeometry = cachedGeometry with { FontFamilyName = "Segoe UI" };
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry, fontGeometry, 110, out var nativeFontGeometry), true, "matching native cache includes editor font family");
+Eq(nativeFontGeometry.FontFamilyName, "Segoe UI", "font family is preserved across backends");
+Eq(UiaTextEditor.BelongsToFocusedWindow(10, 10, 20), true, "focused child process may provide UIA text");
+Eq(UiaTextEditor.BelongsToFocusedWindow(20, 10, 20), true, "foreground owner may provide hosted UIA text");
+Eq(UiaTextEditor.BelongsToFocusedWindow(30, 10, 20), false, "stale UIA focus from another application is excluded");
+Eq(UiaTextEditor.BelongsToFocusedWindow(0, 0, 0), false, "missing process identity cannot validate a field");
+var omniboxSession = new InputSession("", 0, KeyboardLayout.English);
+omniboxSession.Append(Us('g'), KeyboardLayout.English, "");
+Eq(omniboxSession.MatchesWithExternalSelection("google.test", 1, 11), true, "omnibox generated selection is separate from typed prefix");
+Eq(omniboxSession.TryAppendOverExternalSelection("google.test", 1, 11, Us('h'), KeyboardLayout.English), true, "typing over autocomplete retains first key");
+Eq(omniboxSession.Source, "gh", "omnibox first two physical keys remain in one segment");
+string omniboxDocument = "gh";
+foreach (char c in "bdtn") { omniboxSession.Append(Us(c), KeyboardLayout.English, omniboxDocument); omniboxDocument += c; }
+Eq(omniboxSession.Preview, "привет", "omnibox suggestion retains the first converted letter");
+var protectedSuffix = new InputSession("OLD  REAL", 4, KeyboardLayout.English);
+protectedSuffix.Append(Us('g'), KeyboardLayout.English, "OLD  REAL");
+Eq(protectedSuffix.MatchesWithExternalSelection("OLD g REAL", 5, 10), false, "existing suffix cannot be mistaken for generated completion");
+Eq(protectedSuffix.TryAppendOverExternalSelection("OLD g REAL", 5, 10, Us('h'), KeyboardLayout.English), false, "unconfirmed selected suffix is not adopted into the old segment");
+Eq(PreviewMetrics.ResolveFontSize(24, 20, 96, 15, true), 16.0, "inflated omnibox font is limited by visible line height");
+Eq(PreviewMetrics.ResolveFontSize(24, 30, 144, 15, true), 16.0, "font limit uses DIP at 150 percent DPI");
+Eq(PreviewMetrics.ResolveFontSize(24, 40, 192, 15, true), 16.0, "font limit uses DIP at 200 percent DPI");
+Eq(PreviewMetrics.ResolveFontSize(12, 20, 96, 15, true), 12.0, "valid smaller editor font is not enlarged");
+Eq(PreviewMetrics.ResolveFontSize(21, 80, 96, 16, false), 16.0, "temporary paragraph-sized rectangle cannot enlarge an established hint");
+Eq(PreviewMetrics.ResolveFontSize(double.NaN, 100, 96, 16, false), 16.0, "invalid metadata and large geometry retain a stable font");
+Eq(PreviewMetrics.ResolveFontSize(24, 20, 0, 15, true), 16.0, "missing DPI falls back to 96 without division by zero");
+Eq(PreviewMetrics.ResolveFontSize(0, 20, 96, 14, false), 14.0, "missing font metadata does not grow the existing label");
+Eq(Marshal.SizeOf<Native.LOGFONT>(), 92, "Unicode LOGFONT ABI for actual Win32 font parsing");
+Eq(PreviewMetrics.ResolveFontSize(14, 16, 96, 15, true, true), 14.0, "reliable glyph formatting uses actual font size rather than a line-height estimate");
+Eq(PreviewMetrics.OverlayScaleRatio(144, 1.5), 1.0, "matching source and WPF DPI preserve logical font size");
+Eq(PreviewMetrics.OverlayScaleRatio(96, 1.5) * 15 * 1.5, 15.0, "overlay at 150 percent does not enlarge a 96-DPI field font");
+Eq(PreviewMetrics.OverlayScaleRatio(192, 1.0) * 15, 30.0, "overlay at 100 percent reproduces 200-percent source physical size");
+Eq(PreviewMetrics.OverlayScaleRatio(0, double.NaN), 1.0, "unknown DPI scales have a finite fallback");
+var styledGeometry = cachedGeometry with { FontWeightValue = 700, FontItalic = true, FontSource = "Win32 HFONT" };
+Eq(UiaTextEditor.TryMergeNativeGeometry(nativeForGeometry, styledGeometry, 110, out var styledNative), true, "native font style is tied to the verified text and caret");
+Eq(styledNative.FontWeightValue, 700, "bold font weight survives geometry enrichment");
+Eq(styledNative.FontItalic, true, "italic font style survives geometry enrichment");
+Eq(styledNative.FontSource, "Win32 HFONT", "font provenance remains explicit");
+Eq(PreviewMetrics.ResolveFontSize(0, 22, 120, 14.666666666666666, false), 14.666666666666666,
+    "missing metadata cannot shrink the confirmed Notepad font between keystrokes");
+Eq(PreviewMetrics.ResolveFontSize(0, 55, 120, 37.333333333333336, false), 37.333333333333336,
+    "large editor font survives intermittent missing metadata");
+var newlyTyped = nativeForGeometry with { Text = "oldgh", SelectionStart = 5, SelectionEnd = 5 };
+Eq(UiaTextEditor.TryMergeNativeFormatting(newlyTyped, styledGeometry, 110, out var stableFormatting), true,
+    "font metadata may survive typing while geometry still requires an exact match");
+Eq(stableFormatting.Text, "oldgh", "format enrichment never replaces freshly read text");
+Eq(stableFormatting.SelectionStart, 5, "format enrichment never replaces freshly read selection");
+Eq(stableFormatting.Caret.Bottom, newlyTyped.Caret.Bottom, "format enrichment never reuses stale caret coordinates");
+Eq(stableFormatting.FontWeightValue, 700, "temporary geometry mismatch preserves font style");
+Eq(UiaTextEditor.TryMergeNativeFormatting(newlyTyped with { Editor = (IntPtr)9 }, styledGeometry, 110, out _), false,
+    "font cache cannot cross editors");
+Eq(UiaTextEditor.TryMergeNativeFormatting(newlyTyped with { Dpi = 144 }, styledGeometry, 110, out _), false,
+    "font cache cannot cross a DPI change");
+Eq(UiaTextEditor.TryMergeNativeFormatting(newlyTyped, styledGeometry, 301, out _), false,
+    "format enrichment rejects stale snapshots");
+Eq(EditorPolling.Delay(1000, 950, true, 2), 35, "late typed text receives an active refresh");
+Eq(EditorPolling.Delay(1000, 950, true, 70), 80, "slow providers cannot receive the full active polling rate");
+Eq(EditorPolling.Delay(1000, 0, true, 2), 500, "idle supported fields do not poll every frame");
+Eq(EditorPolling.Delay(1000, 0, false, 2), 1000, "idle unsupported fields back off");
+Eq(EditorPolling.Delay(1000, 950, false, 2), 35, "first input can discover a field that appeared late");
+Eq(EditorPolling.MaximumSnapshotAgeMs > EditorPolling.Delay(1000, 0, true, 2), true,
+    "idle snapshots stay readable until the next normal refresh");
+var discoveryBudget = new ShellDiscoveryBudget();
+Eq(discoveryBudget.TryBegin("shell-focus-1", 1000), true, "shell discovery is allowed on focus");
+Eq(discoveryBudget.TryBegin("shell-focus-1", 1100), false, "each key cannot restart shell traversal");
+Eq(discoveryBudget.TryBegin("shell-focus-1", 1300), true, "one retry allows a late-created search field");
+Eq(discoveryBudget.TryBegin("shell-focus-1", 9000), false, "failed discovery never becomes continuous tree polling");
+Eq(discoveryBudget.TryBegin("shell-focus-2", 9000), true, "another focus context receives a fresh discovery budget");
+Eq(ShellSearchResolver.IsSearchProcess("SearchHost"), true, "Windows search has a targeted adapter");
+Eq(ShellSearchResolver.IsSearchProcess("StartMenuExperienceHost"), true, "Start host has a targeted adapter");
+Eq(ShellSearchResolver.IsSearchProcess("chrome"), false, "ordinary applications cannot trigger shell subtree traversal");
+Eq(NotepadEditor.TryReplace(nativeForGeometry, new InputSession("oldg", 4, KeyboardLayout.English),
+    (IntPtr)0x04190419, () => false), false, "cancelled native replacement performs no document access or selection change");
+Eq(UiaTextEditor.TryResolveOffsets("старый 👩‍💻 gh\n", "", "\n", true, out var suffixStart, out var suffixEnd), true,
+    "suffix-based caret offsets preserve emoji UTF-16 and an implicit paragraph mark");
+Eq(suffixStart, "старый 👩‍💻 gh".Length, "caret suffix read does not confuse graphemes with UTF-16 offsets");
+Eq(suffixEnd, suffixStart, "collapsed caret stays collapsed");
+Eq(UiaTextEditor.TryResolveOffsets("OLD gh END", "gh", "OLD ", false, out var prefixStart, out var prefixEnd), true,
+    "prefix-based selection offsets are verified against the document");
+Eq(prefixStart, 4, "selection starts after protected prefix");
+Eq(prefixEnd, 6, "selection length determines its end without rereading the whole prefix");
+Eq(UiaTextEditor.TryResolveOffsets("OLD gh END", "gh", "BAD ", false, out _, out _), false,
+    "same-length changed prefix cannot yield a trusted selection");
+Eq(UiaTextEditor.TryResolveOffsets("OLD gh END", "gh", " BAD", true, out _, out _), false,
+    "same-length changed suffix cannot yield a trusted selection");
+Eq(UiaTextEditor.TryResolveOffsets("short", "gh", "oversized boundary", true, out _, out _), false,
+    "invalid provider range lengths fail closed");
 Console.WriteLine($"PASS: {checks} regression checks");

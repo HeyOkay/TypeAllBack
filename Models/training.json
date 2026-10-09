@@ -1,0 +1,18 @@
+{
+  "en": {
+    "input_sha256": "3fb78e2b55482c8ee00caa653af436c88c9e5bc9a73ce26e4ae3ddc79d2b7e7b",
+    "sentences": 12544,
+    "characters": 783855,
+    "ngrams": 6074,
+    "model_bytes": 58628,
+    "model_sha256": "69cffbddea4125756af52b8e172b0ad197dad1717fd710990140ef2fe3cf5b80"
+  },
+  "ru": {
+    "input_sha256": "0ae33a4bbda12697e2eb0a32af4971bda73af5852c8521744a974a316c02bab5",
+    "sentences": 3850,
+    "characters": 355928,
+    "ngrams": 8844,
+    "model_bytes": 109557,
+    "model_sha256": "88ed569148e44b4d8b4b045494c470e3cab00a85eb56141bb5ba74d2ca34a7d7"
+  }
+}

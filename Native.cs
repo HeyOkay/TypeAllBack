@@ -6,6 +6,31 @@ namespace LayoutPreviewPrototype;
 internal static class Native
 {
     public const int WH_KEYBOARD_LL = 13;
+    public const uint GUI_INMOVESIZE = 0x0002;
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct LOGFONT
+    {
+        public int Height, Width, Escapement, Orientation, Weight;
+        public byte Italic, Underline, StrikeOut, CharacterSet, OutPrecision, ClipPrecision, Quality, PitchAndFamily;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string FaceName;
+    }
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW", CharSet = CharSet.Unicode)]
+    public static extern int GetFontObject(IntPtr font, int size, out LOGFONT description);
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSG
+    {
+        public IntPtr hwnd;
+        public uint message;
+        public UIntPtr wParam;
+        public IntPtr lParam;
+        public uint time;
+        public POINT pt;
+        public uint lPrivate;
+    }
+    [DllImport("user32.dll")] public static extern int GetMessage(out MSG message, IntPtr hwnd, uint min, uint max);
+    [DllImport("user32.dll")] public static extern bool PeekMessage(out MSG message, IntPtr hwnd, uint min, uint max, uint remove);
+    [DllImport("user32.dll")] public static extern bool PostThreadMessage(uint threadId, uint message, UIntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     public const int WM_KEYDOWN = 0x0100;
     public const int WM_SYSKEYDOWN = 0x0104;
     public const uint LLKHF_INJECTED = 0x10;
@@ -95,6 +120,7 @@ internal static class Native
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_KEYUP = 0x0002;
     public const uint KEYEVENTF_UNICODE = 0x0004;
+    public static readonly UIntPtr LayoutPreviewInput = new(0x4C505256u);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -175,4 +201,6 @@ internal static class Native
     public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out UIntPtr result);
     [DllImport("imm32.dll")] public static extern IntPtr ImmGetContext(IntPtr hwnd);
     [DllImport("imm32.dll")] public static extern bool ImmReleaseContext(IntPtr hwnd, IntPtr context);
-    [DllImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW")] public static extern int ImmGetCompositionString(IntPtr context, uint index, IntPtr buffer, uint length);}
+    [DllImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW")] public static extern int ImmGetCompositionString(IntPtr context, uint index, IntPtr buffer, uint length);    [DllImport("oleacc.dll")]
+    public static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint objectId, ref Guid interfaceId,
+        [MarshalAs(UnmanagedType.Interface)] out object? accessible);}
