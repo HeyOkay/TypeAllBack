@@ -6,6 +6,7 @@ namespace LayoutPreviewPrototype;
 internal sealed class TraySettings
 {
     public bool Enabled { get; set; } = true;
+    public bool Sound { get; set; } = true;
     public bool AutoEnter { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public string UpdateFeedUrl { get; set; } = "";

@@ -7,6 +7,7 @@ public partial class App : Application
     private LayoutPreviewController? _controller;
     private Mutex? _instanceMarker;
     private TrayHost? _tray;
+    private CorrectionSound? _sound;
     private TraySettings? _settings;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -45,9 +46,11 @@ public partial class App : Application
         _settings.Save();
         AutoEnterOptions.SetEnabled(_settings.AutoEnter);
         AutoEnterOptions.Changed += SaveAutoEnter;
+        _sound = new CorrectionSound(_settings.Sound);
         _controller = new LayoutPreviewController();
+        _controller.ReplacementConfirmed += _sound.Play;
         _controller.Start(_settings.Enabled);
-        _tray = new TrayHost(_settings, _controller.SetEnabled, _controller.ShowDebug);
+        _tray = new TrayHost(_settings, _controller.SetEnabled, _controller.ShowDebug, _sound);
     }
 
     private void SaveAutoEnter(bool enabled)
@@ -62,6 +65,7 @@ public partial class App : Application
         AutoEnterOptions.Changed -= SaveAutoEnter;
         _tray?.Dispose();
         _controller?.Dispose();
+        _sound?.Dispose();
         _instanceMarker?.Dispose();
         _instanceMarker = null;
         base.OnExit(e);

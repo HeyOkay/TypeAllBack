@@ -11,6 +11,7 @@
   </PropertyGroup>
 <ItemGroup>
   <Resource Include="Assets\TypeAllBack.ico" />
+  <EmbeddedResource Include="Assets\Correction.wav" LogicalName="TypeAllBack.Correction.wav" />
   <Compile Remove="Tests\**\*.cs" />
   <EmbeddedResource Include="Models\en.json" LogicalName="LayoutPreview.Models.en.json" />
   <EmbeddedResource Include="Models\ru.json" LogicalName="LayoutPreview.Models.ru.json" />

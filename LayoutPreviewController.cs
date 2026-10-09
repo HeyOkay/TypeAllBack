@@ -5,6 +5,7 @@ using System.Windows.Threading;
 namespace LayoutPreviewPrototype;
 public sealed class LayoutPreviewController : IDisposable
 {
+    internal event Action? ReplacementConfirmed;
     private readonly PreviewWindow _preview = new();
     private double _lastHookCaptureMs;
     private bool _forwardEnter;
@@ -887,6 +888,7 @@ public sealed class LayoutPreviewController : IDisposable
             {
                 bool replaced = await TextEditor.TryReplaceAsync(editor, session, _targetLayout, () => generation == _generation && _accepting && EnterValid());
                 replacementConfirmed = replaced;
+                if (replaced) ReplacementConfirmed?.Invoke();
                 Diagnostic("Замена", replaced ? "Полный результат подтверждён редактором" : "Результат замены не подтверждён; подробности в событиях backend");
                 Trace.WriteLine("Accept replace result: " + replaced);
                 if (replaced && TextEditor.TryRead(out var accepted) &&

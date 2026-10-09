@@ -14,11 +14,12 @@ internal sealed class TrayHost : IDisposable
     private readonly UpdateChecker _updates = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(24) };
     private bool _disposed;
-    internal TrayHost(TraySettings settings, Action<bool> enabled, Action debug)
+    internal TrayHost(TraySettings settings, Action<bool> enabled, Action debug, CorrectionSound sound)
     {
         _settings = settings;
         _menu.AddToggle("Утилита включена", () => settings.Enabled, value => { enabled(value); settings.Enabled = value; settings.Save(); });
         _menu.AddToggle("Исправлять перед Enter", () => AutoEnterOptions.Enabled, AutoEnterOptions.SetEnabled);
+        _menu.AddToggle("Звук исправления", () => sound.Enabled, value => { sound.SetEnabled(value); settings.Sound = value; settings.Save(); });
         _menu.AddCommand("Отладка…", debug);
         _menu.Separator();
         _menu.AddToggle("Запускать с Windows", AutoStartEnabled, SetAutoStart);
