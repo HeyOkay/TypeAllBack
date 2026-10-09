@@ -7,9 +7,7 @@ namespace LayoutPreviewPrototype;
 internal sealed record EditorSnapshot(IntPtr Foreground, IntPtr Editor, uint Thread, IntPtr Layout,
     string Text, int SelectionStart, int SelectionEnd, Native.RECT Caret, uint Dpi,
     string AutomationIdentity = "", long CapturedAt = 0, double FontSizeDip = 0, string FontFamilyName = "",
-    int FontWeightValue = 400, bool FontItalic = false, string FontSource = "", long Revision = 0,
-    System.Windows.Media.Color? FieldBackground = null, System.Windows.Media.Color? FieldForeground = null,
-    string AppearanceSource = "");
+    int FontWeightValue = 400, bool FontItalic = false, string FontSource = "", long Revision = 0);
 // Bounded Win32 adapter. Unknown controls, selections, passwords and IME fail closed.
 internal static class NotepadEditor
 {

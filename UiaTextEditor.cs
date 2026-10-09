@@ -124,8 +124,7 @@ internal sealed class UiaTextEditor : IDisposable
     private static EditorSnapshot CopyFormatting(EditorSnapshot target, EditorSnapshot source) => target with
     {
         FontSizeDip = source.FontSizeDip, FontFamilyName = source.FontFamilyName,
-        FontWeightValue = source.FontWeightValue, FontItalic = source.FontItalic, FontSource = source.FontSource,
-        FieldBackground = source.FieldBackground, FieldForeground = source.FieldForeground, AppearanceSource = source.AppearanceSource
+        FontWeightValue = source.FontWeightValue, FontItalic = source.FontItalic, FontSource = source.FontSource
     };
 
     private EditorSnapshot WithFormatting(EditorSnapshot context, bool presentation, Func<EditorSnapshot> read)
@@ -145,28 +144,8 @@ internal sealed class UiaTextEditor : IDisposable
             try { candidate = read(); }
             catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or ElementNotAvailableException)
             { /* Unavailable formatting must not invalidate verified text or the last font. */ }
-            if (_formattingSnapshot is { } previous)
-            {
-                bool missingFont = candidate.FontSizeDip <= 0 && candidate.FontFamilyName.Length == 0;
-                if (candidate.FontSource.StartsWith("Local glyph estimate", StringComparison.Ordinal) &&
-                    previous.FontSource == candidate.FontSource && previous.FontSizeDip > 0 &&
-                    previous.FontFamilyName == candidate.FontFamilyName && previous.FontWeightValue == candidate.FontWeightValue &&
-                    previous.FontItalic == candidate.FontItalic &&
-                    Math.Abs(candidate.FontSizeDip - previous.FontSizeDip) <= previous.FontSizeDip * 0.1)
-                    candidate = candidate with { FontSizeDip = previous.FontSizeDip }; // subpixel/raster jitter
-                candidate = candidate with
-                {
-                    FontSizeDip = candidate.FontSizeDip > 0 ? candidate.FontSizeDip : previous.FontSizeDip,
-                    FontFamilyName = candidate.FontFamilyName.Length > 0 ? candidate.FontFamilyName : previous.FontFamilyName,
-                    FontWeightValue = missingFont ? previous.FontWeightValue : candidate.FontWeightValue,
-                    FontItalic = missingFont ? previous.FontItalic : candidate.FontItalic,
-                    FontSource = missingFont ? previous.FontSource : candidate.FontSource,
-                    FieldBackground = candidate.FieldBackground ?? previous.FieldBackground,
-                    FieldForeground = candidate.FieldForeground ?? previous.FieldForeground,
-                    AppearanceSource = candidate.AppearanceSource.Length > 0 ? candidate.AppearanceSource : previous.AppearanceSource
-                };
-            }
-            _formattingSnapshot = candidate with { Text = "" };
+            if (candidate.FontSizeDip > 0 || _formattingSnapshot == null)
+                _formattingSnapshot = candidate with { Text = "" };
         }
         return _formattingSnapshot == null ? context : CopyFormatting(context, _formattingSnapshot);
     }
@@ -186,8 +165,7 @@ internal sealed class UiaTextEditor : IDisposable
             FontFamilyName = cached.FontFamilyName,
             FontWeightValue = cached.FontWeightValue,
             FontItalic = cached.FontItalic,
-            FontSource = cached.FontSource,
-            FieldBackground = cached.FieldBackground, FieldForeground = cached.FieldForeground, AppearanceSource = cached.AppearanceSource
+            FontSource = cached.FontSource
         };
         return true;
     }
@@ -478,9 +456,8 @@ internal sealed class UiaTextEditor : IDisposable
             snapshot = WithFormatting(context, presentation, () =>
             {
                 var formatting = GetFormattingRange(selectedRange);
-                var styled = context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
+                return context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
                     FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = ReadUiaFontSource(focused, editableElement) };
-                return LocalFieldAppearance.Enrich(styled, formatting);
             });
             return true;
         }
@@ -660,7 +637,6 @@ internal sealed class UiaTextEditor : IDisposable
                 NotepadEditor.TryReadFont(before, out var nativeFont, out var nativeSize))
                 result = result with { FontSizeDip = nativeSize, FontFamilyName = nativeFont.FaceName,
                     FontWeightValue = nativeFont.Weight, FontItalic = nativeFont.Italic != 0, FontSource = "Win32 HFONT" };
-            if (selectedRange != null) result = LocalFieldAppearance.Enrich(result, GetFormattingRange(selectedRange));
             return result;
         });
         // COM can be slow and the user can edit/move the caret while it is running.

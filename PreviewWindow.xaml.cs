@@ -16,29 +16,21 @@ public partial class PreviewWindow : Window
     internal event Action<string>? ThemeChanged;
     internal event Action<string>? FontMetricsChanged;
     private readonly WindowsPreviewTheme _theme;
-    private Color? _fieldBackground, _fieldForeground;
-    private string _appearanceSource = "";
     internal string ThemeDescription { get; private set; } = "Тема ещё не определена";
 
     private void ApplyTheme(PreviewThemePalette palette)
     {
         static SolidColorBrush Brush(Color color) { var brush = new SolidColorBrush(color); brush.Freeze(); return brush; }
-        bool fieldStyle = palette.Mode != PreviewThemeMode.HighContrast && _fieldBackground != null;
-        Color background = fieldStyle ? _fieldBackground!.Value : palette.Background;
-        Color foreground = fieldStyle ? _fieldForeground ??
-            (background.R * 0.2126 + background.G * 0.7152 + background.B * 0.0722 > 128 ? Color.FromRgb(70, 70, 70) : Color.FromRgb(220, 220, 220)) : palette.Text;
-        Color border = fieldStyle ? Color.FromRgb((byte)((background.R * 3 + foreground.R) / 4),
-            (byte)((background.G * 3 + foreground.G) / 4), (byte)((background.B * 3 + foreground.B) / 4)) : palette.Border;
-        PreviewBorder.Background = Brush(background);
-        PreviewBorder.BorderBrush = Brush(border);
-        PreviewText.Foreground = Brush(foreground);
-        string description = fieldStyle ? "Оформление активного поля: " + _appearanceSource : palette.Mode switch
+        PreviewBorder.Background = Brush(palette.Background);
+        PreviewBorder.BorderBrush = Brush(palette.Border);
+        PreviewText.Foreground = Brush(palette.Text);
+        ThemeDescription = palette.Mode switch
         {
             PreviewThemeMode.Light => "Светлая тема Windows",
             PreviewThemeMode.Dark => "Тёмная тема Windows",
             _ => "Контрастная тема Windows"
         };
-        if (ThemeDescription != description) { ThemeDescription = description; ThemeChanged?.Invoke(description); }
+        ThemeChanged?.Invoke(ThemeDescription);
     }
 
     private IntPtr ThemeMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -66,7 +58,7 @@ public partial class PreviewWindow : Window
     private bool _dpiRefreshQueued;
     private string _lastFontDiagnostic = "";
     private sealed record RenderRequest(string Text, Native.RECT Caret, uint Dpi, double FontSize,
-        string Family, int Weight, bool Italic, string Source, Color? Background, Color? Foreground, string AppearanceSource);
+        string Family, int Weight, bool Italic, string Source);
     private RenderRequest? _lastRender;
 
     public PreviewWindow()
@@ -85,16 +77,12 @@ public partial class PreviewWindow : Window
     }
 
     internal void ShowPreview(string text, Native.RECT caretPx, uint targetDpi, bool animateFirstAppearance,
-        double fontSizeDip = 0, string fontFamilyName = "", int fontWeight = 400, bool fontItalic = false, string fontSource = "",
-        Color? fieldBackground = null, Color? fieldForeground = null, string appearanceSource = "")
+        double fontSizeDip = 0, string fontFamilyName = "", int fontWeight = 400, bool fontItalic = false, string fontSource = "")
     {
         if (_acceptAnimationRunning)
             return;
         using var measurement = PerformanceDiagnostics.Measure("preview-render");
-        _lastRender = new(text, caretPx, targetDpi, fontSizeDip, fontFamilyName, fontWeight, fontItalic, fontSource,
-            fieldBackground, fieldForeground, appearanceSource);
-        _fieldBackground = fieldBackground; _fieldForeground = fieldForeground; _appearanceSource = appearanceSource;
-        if (_theme.Current != null) ApplyTheme(_theme.Current);
+        _lastRender = new(text, caretPx, targetDpi, fontSizeDip, fontFamilyName, fontWeight, fontItalic, fontSource);
         new WindowInteropHelper(this).EnsureHandle();
         double overlayScale = VisualTreeHelper.GetDpi(this).DpiScaleY;
         _layoutScale = PreviewMetrics.OverlayScaleRatio(targetDpi, overlayScale);
@@ -157,7 +145,7 @@ public partial class PreviewWindow : Window
 
         Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, windowLeftPx, windowTopPx, 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
-        string fontDiagnostic = $"source={fontSource} sizeBasis={(PreviewMetrics.NeedsOmniboxFallback(fontSource, fontSizeDip) ? "Chromium-desktop-default-14dip" : "font-metadata-or-geometry")} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic} appearance={appearanceSource} fieldBackground={fieldBackground} fieldForeground={fieldForeground}";
+        string fontDiagnostic = $"source={fontSource} sizeBasis={(PreviewMetrics.NeedsOmniboxFallback(fontSource, fontSizeDip) ? "Chromium-desktop-default-14dip" : "font-metadata-or-geometry")} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
         if (animateFirstAppearance || fontDiagnostic != _lastFontDiagnostic)
         {
             Trace.WriteLine("Font metrics: " + fontDiagnostic);
@@ -264,7 +252,7 @@ public partial class PreviewWindow : Window
             var render = _lastRender;
             if (IsVisible && render != null && !_acceptAnimationRunning)
                 ShowPreview(render.Text, render.Caret, render.Dpi, false, render.FontSize,
-                    render.Family, render.Weight, render.Italic, render.Source, render.Background, render.Foreground, render.AppearanceSource);
+                    render.Family, render.Weight, render.Italic, render.Source);
         }, System.Windows.Threading.DispatcherPriority.Send);
     }
 

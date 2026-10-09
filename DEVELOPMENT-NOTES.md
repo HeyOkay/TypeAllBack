@@ -1,23 +1,5 @@
 # Decisions retained from user feedback
 
-- 2026-10-10: user rejected a browser extension and authorized implementation
-  inside the utility, without per-site or per-field manual configuration. Added
-  generic field appearance: UIA foreground/background attributes plus at most a
-  96x96 physical-pixel patch near the verified caret/adjacent glyph. Sampling runs
-  only in the existing MTA formatting refresh (at most twice/second), avoids the
-  popup to the caret's right, retains no image or OCR result, and never affects
-  document validation/replacement. Dominant stable background and last ink run
-  determine colors and glyph height; uncertain imagery falls back. Missing or
-  substantially inconsistent UIA sizes use a glyph-height estimate with DPI and
-  available font family; absent family still uses a labelled fallback. Exact
-  family matching is not guaranteed without provider metadata. Preserve native
-  HFONT sizes, stabilize small raster variations and cache by field/focus/DPI.
-  Field colors override Windows theme; Windows high contrast has priority.
-  Diagnostic font rows expose appearance source/colors and estimate source.
-  No browser extension, remote debugging, process injection or website rules.
-  Browser/Notepad live visual verification remains with the user.
-
-
 - 2026-10-10: real Chrome metrics identify OmniboxViewViews/Ctrl+L correctly but
   expose no font family/size: reportedDip=0, caretPixels=30, DPI=120. Generic 0.8
   line fallback gave 19.2 DIP and 32 physical pixels of WPF line height. Use the

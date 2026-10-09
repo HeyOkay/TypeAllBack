@@ -143,7 +143,6 @@ public sealed class LayoutPreviewController : IDisposable
     private int _lastFontWeight;
     private bool _lastFontItalic;
     private string _lastFontSource = "";
-    private System.Windows.Media.Color? _lastFieldBackground, _lastFieldForeground;
     private string _lastPreviewDiagnostic = "";
     private int _snapshotUpdateQueued;
     private long _lastVerifiedRevision = -1;
@@ -546,16 +545,13 @@ public sealed class LayoutPreviewController : IDisposable
             caret.Right == _lastCaret.Right && caret.Bottom == _lastCaret.Bottom && current.Dpi == _lastDpi &&
             current.FontSizeDip == _lastFontSizeDip && current.FontFamilyName == _lastFontFamilyName &&
             current.FontWeightValue == _lastFontWeight && current.FontItalic == _lastFontItalic &&
-            current.FontSource == _lastFontSource && current.FieldBackground == _lastFieldBackground &&
-            current.FieldForeground == _lastFieldForeground) { PublishAcceptContext(current); return; }
+            current.FontSource == _lastFontSource) { PublishAcceptContext(current); return; }
         bool first = !_hasAppeared; _visible = true; _hasAppeared = true;
         _lastPreview = text; _lastCaret = caret; _lastDpi = current.Dpi; _lastFontSizeDip = current.FontSizeDip;
-        _lastFieldBackground = current.FieldBackground; _lastFieldForeground = current.FieldForeground;
         _lastFontFamilyName = current.FontFamilyName;
         _lastFontWeight = current.FontWeightValue; _lastFontItalic = current.FontItalic; _lastFontSource = current.FontSource;
         _preview.ShowPreview(text, caret, current.Dpi == 0 ? 96 : current.Dpi, first, current.FontSizeDip,
-            current.FontFamilyName, current.FontWeightValue, current.FontItalic, current.FontSource,
-            current.FieldBackground, current.FieldForeground, current.AppearanceSource);
+            current.FontFamilyName, current.FontWeightValue, current.FontItalic, current.FontSource);
         PublishAcceptContext(current);
     }
 

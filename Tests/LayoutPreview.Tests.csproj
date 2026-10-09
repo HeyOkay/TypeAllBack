@@ -15,7 +15,6 @@
     <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
     <Compile Include="../PreviewMetrics.cs" Link="PreviewMetrics.cs" />
     <Compile Include="../PreviewTheme.cs" Link="PreviewTheme.cs" />
-    <Compile Include="../LocalFieldAppearance.cs" Link="LocalFieldAppearance.cs" />
     <Compile Include="../NotepadEditor.cs" Link="NotepadEditor.cs" />
     <Compile Include="../TextEditor.cs" Link="TextEditor.cs" />
     <Compile Include="../UiaTextEditor.cs" Link="UiaTextEditor.cs" />
