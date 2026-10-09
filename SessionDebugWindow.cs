@@ -150,10 +150,13 @@ internal sealed class SessionDebugWindow : Window
 
     private void RenderHistory(SessionDiagnosticEvent[] events)
     {
-        // Starting a new session retires both highlights from the previous one.
+        // Current session boundaries are bright; prior boundaries retain quieter colors.
         var current = events.Where(entry => entry.SessionId == _diagnostics.SessionId).ToArray();
         var latestStart = current.LastOrDefault(entry => entry.Kind == "Начало");
         var latestEnd = current.LastOrDefault(entry => entry.Kind == "Окончание");
+        Brush brightRed = new SolidColorBrush(Color.FromRgb(255, 64, 64));
+        Brush historicalGreen = new SolidColorBrush(Color.FromRgb(70, 150, 70));
+        Brush historicalRed = new SolidColorBrush(Color.FromRgb(184, 92, 92));
         double scrollOffset = _history.VerticalOffset;
         _history.BeginChange();
         try
@@ -162,7 +165,9 @@ internal sealed class SessionDebugWindow : Window
             foreach (var entry in events)
             {
                 Brush color = entry == latestStart ? Brushes.Lime :
-                    entry == latestEnd ? new SolidColorBrush(Color.FromRgb(255, 64, 64)) : Brushes.Gainsboro;
+                    entry == latestEnd ? brightRed :
+                    entry.Kind == "Начало" ? historicalGreen :
+                    entry.Kind == "Окончание" ? historicalRed : Brushes.Gainsboro;
                 _history.Document.Blocks.Add(new Paragraph(new Run(entry.ToString()) { Foreground = color })
                     { Margin = new Thickness(0, 0, 0, 3) });
             }

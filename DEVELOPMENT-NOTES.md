@@ -1,5 +1,10 @@
 # Decisions retained from user feedback
 
+- 2026-10-10, superseding boundary colors: retain muted green/red on past session
+  start/end rows instead of reverting them to ordinary gray. Only the current
+  session's latest start/end stay bright green/red. Other event types stay gray.
+
+
 - 2026-10-10, updated debug log requirement: a new session resets BOTH preceding
   boundary highlights. Green/red now apply only to the latest start/end with the
   current session ID. Replaced ListBox with readonly RichTextBox so mouse selection,
