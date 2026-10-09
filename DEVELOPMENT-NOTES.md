@@ -1,5 +1,11 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: debug event log colors only the latest retained actual session start
+  bright green and the latest retained actual session end bright red, independently.
+  Earlier events revert to normal text. "Startup refined" and other diagnostics are
+  not lifecycle boundaries. Clearing history removes highlights as well.
+
+
 - 2026-10-10: user reiterated that debug must contain a separate list of independently
   switchable session start rules. Added direct typing, selection replacement and
   deferred startup gates covering the three existing creation paths. Defaults retain

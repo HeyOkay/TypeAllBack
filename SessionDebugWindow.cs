@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -137,9 +138,35 @@ internal sealed class SessionDebugWindow : Window
         if (_historyRevision == _diagnostics.Revision) return;
         _historyRevision = _diagnostics.Revision;
         var selected = _history.SelectedItem;
-        _history.ItemsSource = _diagnostics.Events.ToArray();
+        var events = _diagnostics.Events.ToArray();
+        SetHistoryColors(events);
+        _history.ItemsSource = events;
         if (selected != null) _history.SelectedItem = selected;
         if (_follow.IsChecked == true && _history.Items.Count > 0) _history.ScrollIntoView(_history.Items[^1]);
+    }
+
+    private void SetHistoryColors(SessionDiagnosticEvent[] events)
+    {
+        // Color exactly the most recent retained start and end independently.
+        // Replacing the style also removes highlighting from their predecessors.
+        var style = new Style(typeof(ListBoxItem));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Gainsboro));
+        var latestStart = events.LastOrDefault(entry => entry.Kind == "Начало");
+        var latestEnd = events.LastOrDefault(entry => entry.Kind == "Окончание");
+        void Highlight(SessionDiagnosticEvent? entry, Brush color)
+        {
+            if (entry == null) return;
+            var trigger = new DataTrigger
+            {
+                Binding = new Binding(nameof(SessionDiagnosticEvent.Number)),
+                Value = entry.Number
+            };
+            trigger.Setters.Add(new Setter(Control.ForegroundProperty, color));
+            style.Triggers.Add(trigger);
+        }
+        Highlight(latestStart, Brushes.Lime);
+        Highlight(latestEnd, new SolidColorBrush(Color.FromRgb(255, 64, 64)));
+        _history.ItemContainerStyle = style;
     }
 
     private static void SetText(TextBox field, string text) { if (field.Text != text) field.Text = text; }
