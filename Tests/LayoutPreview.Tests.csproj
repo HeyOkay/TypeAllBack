@@ -17,6 +17,7 @@
     <Compile Include="../TextEditor.cs" Link="TextEditor.cs" />
     <Compile Include="../UiaTextEditor.cs" Link="UiaTextEditor.cs" />
     <Compile Include="../EditorPolling.cs" Link="EditorPolling.cs" />
+    <Compile Include="../EditorAvailability.cs" Link="EditorAvailability.cs" />
     <Compile Include="../PerformanceDiagnostics.cs" Link="PerformanceDiagnostics.cs" />
     <Compile Include="../ShellSearchResolver.cs" Link="ShellSearchResolver.cs" />
   </ItemGroup>

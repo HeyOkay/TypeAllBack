@@ -1,5 +1,17 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: user observed a session end during ordinary typing in ChatGPT Desktop,
+  with no deliberate focus change: "editor unavailable ... focus stability". Fixed a
+  concrete grace-period bug: count 1200 ms of continuous unavailable reads from the
+  first failure, not the age of the retained editor snapshot. Refresh retained context
+  even on unchanged revision/source. A gap hides/disarms the preview but retains the
+  session; recovery verifies all captured text before restoring it. Window/field
+  changes and unverified edits still fail closed. UIA final capture diagnostics now
+  distinguish focus identity, window, value, selection endpoints, document mutation,
+  focus events and exception type. This does not establish the cause of every ChatGPT
+  outage; real user verification is pending.
+
+
 - 2026-10-10, superseding boundary colors: retain muted green/red on past session
   start/end rows instead of reverting them to ordinary gray. Only the current
   session's latest start/end stay bright green/red. Other event types stay gray.

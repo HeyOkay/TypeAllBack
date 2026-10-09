@@ -7,6 +7,7 @@ public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
     private readonly SessionDiagnostics _diagnostics = new();
+    private readonly EditorAvailability _editorAvailability = new();
     private readonly SessionStartRules _startRules = new();
     private SessionStartRuleId? _lastDeniedRule;
     private long _rulesChangedSequence = -1;
@@ -65,6 +66,7 @@ public sealed class LayoutPreviewController : IDisposable
     private void BeginDiagnosticSession(string reason, int offset)
     {
         _diagnostics.End("Новая сессия заменила предыдущую: " + reason, CaptureDiagnostics());
+        _editorAvailability.Reset();
         _debugConfirmed = ""; _debugState = "Ожидание подтверждения";
         _diagnostics.Start(reason, offset);
         _debugApplication = "Неизвестное приложение";
@@ -400,29 +402,38 @@ public sealed class LayoutPreviewController : IDisposable
             if (!_acceptedInput.IsArmed || _acceptedEditor == null) { _watch.Stop(); return; }
             if (TextEditor.TryRead(out var focused))
             {
+                _editorAvailability.Reset();
                 if (!TextEditor.SameEditor(_acceptedEditor, focused))
                 { _acceptedInput.Disarm(); _acceptedEditor = null; _watch.Stop(); }
                 else _acceptedEditor = _acceptedEditor with { CapturedAt = focused.CapturedAt };
             }
             else if (Native.GetForegroundWindow() != _acceptedEditor.Foreground ||
-                Environment.TickCount64 - _acceptedEditor.CapturedAt > 1200)
+                !_editorAvailability.CanWait(Environment.TickCount64))
             { _acceptedInput.Disarm(); _acceptedEditor = null; _watch.Stop(); }
             return;
         }
         if (!TextEditor.TryRead(out var current))
         {
-            // UIA providers can briefly stop answering while the same app remains
-            // focused. Keep the session dormant through that gap; Accept still has
-            // to revalidate a fresh snapshot before it can change any text.
-            if (_editor is { } activeEditor &&
-                Native.GetForegroundWindow() == activeEditor.Foreground &&
-                Environment.TickCount64 - activeEditor.CapturedAt < 1200)
+            if (_editor == null || Native.GetForegroundWindow() != _editor.Foreground)
+            { Reset("Смена окна при недоступном снимке редактора"); return; }
+            bool firstFailure = !_editorAvailability.Waiting;
+            if (_editorAvailability.CanWait(Environment.TickCount64))
+            {
+                if (firstFailure) Diagnostic("Ожидание редактора", "Сессия сохранена; причина снимка: " + TextEditor.LastCaptureFailure);
+                _debugState = "Сессия сохранена; ожидается доступный снимок редактора";
+                _visible = false;
+                if (_keyboard != null) _keyboard.AcceptContext = null;
+                _preview.HidePreview();
                 return;
-            Reset("Редактор недоступен дольше допуска: " + TextEditor.LastCaptureFailure); return;
+            }
+            Reset("Редактор непрерывно недоступен не менее 1200 мс: " + TextEditor.LastCaptureFailure); return;
         }
+        bool recovered = _editorAvailability.Waiting;
+        if (recovered) Diagnostic("Редактор доступен", $"Снимок восстановлен после {_editorAvailability.Duration(Environment.TickCount64)} мс; требуется подтверждение всей сессии");
+        _editorAvailability.Reset();
         if (_editor == null || !TextEditor.SameEditor(_editor, current)) { Reset("Смена окна или поля ввода"); return; }
-        if (_pendingInputs.Count == 0 && _lastVerifiedRevision == current.Revision && _lastVerifiedSource == _session.Source)
-        { if (_visible) PublishAcceptContext(current); return; }
+        if (!recovered && _pendingInputs.Count == 0 && _lastVerifiedRevision == current.Revision && _lastVerifiedSource == _session.Source)
+        { _editor = current with { Text = "" }; if (_visible) PublishAcceptContext(current); return; }
         TryConfirmUiaStartup(current);
         if (_pendingInputs.Count > 0 && !TryReconcilePending(current))
         {
@@ -736,6 +747,7 @@ public sealed class LayoutPreviewController : IDisposable
     private void Reset(string reason = "Сброс состояния", [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
         _diagnostics.End(reason + $" ({caller})", CaptureDiagnostics());
+        _editorAvailability.Reset();
         _debugConfirmed = "";
         _lastVerifiedRevision = -1;
         _lastVerifiedSource = "";

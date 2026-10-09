@@ -415,18 +415,30 @@ internal sealed class UiaTextEditor : IDisposable
                 // Text and selection remain useful even if Chromium has not yet
                 // published screen bounds. Rendering must not invalidate input.
             }
-            stage = "focus stability";
+            stage = "Идентификатор UIA-поля недоступен";
             uint editorThread = Native.GetWindowThreadProcessId(focusHandle, IntPtr.Zero);
             string identity = string.Join(".", element.GetRuntimeId());
+            if (identity.Length == 0) return false;
+            stage = "Активное окно изменилось во время снимка";
+            if (Native.GetForegroundWindow() != foreground) return false;
+            stage = "UIA-фокус недоступен при повторном чтении";
             var focusedAfter = AutomationElement.FocusedElement;
-            if (identity.Length == 0 || Native.GetForegroundWindow() != foreground || focusedAfter == null ||
-                !focusedAfter.GetRuntimeId().SequenceEqual(focusedId) || focusedAfter.Current.IsPassword) return false;
+            if (focusedAfter == null) return false;
+            stage = "Идентификатор UIA-фокуса изменился во время снимка";
+            if (!focusedAfter.GetRuntimeId().SequenceEqual(focusedId)) return false;
+            stage = "Фокус перешёл в защищённое поле";
+            if (focusedAfter.Current.IsPassword) return false;
+            stage = "Значение поля изменилось во время снимка";
             if (usingValue && valuePattern!.Current.Value != value) return false;
+            stage = "Число диапазонов выделения изменилось во время снимка";
             var finalSelections = pattern.GetSelection();
-            if (finalSelections.Length != 1 ||
-                selection.CompareEndpoints(TextPatternRangeEndpoint.Start, finalSelections[0], TextPatternRangeEndpoint.Start) != 0 ||
-                selection.CompareEndpoints(TextPatternRangeEndpoint.End, finalSelections[0], TextPatternRangeEndpoint.End) != 0 ||
-                (!usingValue && pattern.DocumentRange.GetText(MaximumText + 1) != rawDocumentText)) return false;
+            if (finalSelections.Length != 1) return false;
+            stage = "Начало выделения изменилось во время снимка";
+            if (selection.CompareEndpoints(TextPatternRangeEndpoint.Start, finalSelections[0], TextPatternRangeEndpoint.Start) != 0) return false;
+            stage = "Конец выделения изменился во время снимка";
+            if (selection.CompareEndpoints(TextPatternRangeEndpoint.End, finalSelections[0], TextPatternRangeEndpoint.End) != 0) return false;
+            stage = "Текст документа изменился во время снимка";
+            if (!usingValue && pattern.DocumentRange.GetText(MaximumText + 1) != rawDocumentText) return false;
             snapshot = new(foreground, focusHandle, editorThread, Native.GetKeyboardLayout(editorThread), text,
                 start, end, caret, Native.GetDpiForWindow(focusHandle), identity, Environment.TickCount64);
             var context = snapshot;
@@ -440,12 +452,16 @@ internal sealed class UiaTextEditor : IDisposable
             return true;
         }
         catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or System.ComponentModel.Win32Exception or ElementNotAvailableException)
-        { _boundContext = ""; return false; }
+        { stage += " (" + e.GetType().Name + ")"; _boundContext = ""; return false; }
         finally
         {
             // A focus event can race the optional formatting calls after the
             // document check. Never republish the old field across that event.
-            if (captureFocusGeneration != Volatile.Read(ref _focusGeneration)) snapshot = null;
+            if (captureFocusGeneration != Volatile.Read(ref _focusGeneration))
+            {
+                stage = snapshot != null ? "Событие смены фокуса во время снимка" : stage + "; событие смены фокуса";
+                snapshot = null;
+            }
             Volatile.Write(ref _lastCaptureFailure, snapshot == null ? stage : "");
             if (snapshot == null)
             {
