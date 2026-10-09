@@ -558,4 +558,16 @@ Eq(PreviewMetrics.HasReliableFormatting("UIA omnibox; focusedClass=OmniboxViewVi
     "diagnostic metadata cannot disable the omnibox font bound");
 Eq(PreviewMetrics.HasReliableFormatting("UIA character; focusedClass=Textfield"), true,
     "metadata reporting preserves other fields' existing font treatment");
+const string missingOmniboxFont = "UIA omnibox; focusedClass=OmniboxViewViews";
+Eq(PreviewMetrics.ResolveFontSize(0, 30, 120, 15, true, false, missingOmniboxFont), 14.0,
+    "reported Chrome case uses its standard desktop fallback instead of padded 30px caret height");
+foreach (uint dpi in new uint[] { 96, 120, 144, 192 })
+    Eq(PreviewMetrics.ResolveFontSize(0, (int)(24 * dpi / 96), dpi, 19.2, false, false, missingOmniboxFont), 14.0,
+        "missing omnibox font remains 14 DIP across DPI and cannot retain the inflated prior size");
+Eq(PreviewMetrics.ResolveFontSize(0, 0, 120, 19.2, true, false, missingOmniboxFont), 14.0,
+    "missing geometry does not restore the padded-line font estimate");
+Eq(PreviewMetrics.ResolveFontSize(12, 30, 120, 19.2, true, false, missingOmniboxFont), 12.0,
+    "available smaller font metadata takes precedence over omnibox fallback");
+Eq(PreviewMetrics.ResolveFontSize(0, 22, 120, 14.666666666666666, false, true, "UIA character"), 14.666666666666666,
+    "missing native or other UIA metadata still preserves the established size");
 Console.WriteLine($"PASS: {checks} regression checks");

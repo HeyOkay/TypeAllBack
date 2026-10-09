@@ -1,5 +1,17 @@
 # Decisions retained from user feedback
 
+- 2026-10-10: real Chrome metrics identify OmniboxViewViews/Ctrl+L correctly but
+  expose no font family/size: reportedDip=0, caretPixels=30, DPI=120. Generic 0.8
+  line fallback gave 19.2 DIP and 32 physical pixels of WPF line height. Use the
+  Chromium ordinary desktop omnibox 14-DIP desired size as an explicitly labelled
+  fallback only when omnibox metadata is unavailable; never preserve the old
+  inflated fallback across subsequent keys. Actual available metadata and other
+  editor sources retain their existing treatment. Touch UI (15 DIP), custom text
+  sizing and locale adjustments are not established by this fallback; do not claim
+  exact matching for all Chrome configurations. Source:
+  https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/browser/ui/views/chrome_typography.cc
+
+
 - 2026-10-10: user clarified the input-only filter is already off but Chrome shows
   no font metrics row while ChatGPT does. Renderer had deduplicated font metrics
   across sessions globally, so a missing row did not prove missing provider data.

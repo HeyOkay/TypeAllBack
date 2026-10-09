@@ -108,7 +108,7 @@ public partial class PreviewWindow : Window
         PreviewBorder.BeginAnimation(WidthProperty, null);
         PreviewBorder.Width = double.NaN;
         double sourceSize = PreviewMetrics.ResolveFontSize(fontSizeDip, caretPx.Bottom - caretPx.Top,
-            targetDpi, PreviewText.FontSize / _layoutScale, animateFirstAppearance, PreviewMetrics.HasReliableFormatting(fontSource));
+            targetDpi, PreviewText.FontSize / _layoutScale, animateFirstAppearance, PreviewMetrics.HasReliableFormatting(fontSource), fontSource);
         PreviewText.FontSize = sourceSize * _layoutScale;
         PreviewText.Text = text.TrimEnd();
         // Measure the actual Display-mode TextBlock. FormattedText used different
@@ -145,7 +145,7 @@ public partial class PreviewWindow : Window
 
         Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, windowLeftPx, windowTopPx, 0, 0,
             Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
-        string fontDiagnostic = $"source={fontSource} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
+        string fontDiagnostic = $"source={fontSource} sizeBasis={(PreviewMetrics.NeedsOmniboxFallback(fontSource, fontSizeDip) ? "Chromium-desktop-default-14dip" : "font-metadata-or-geometry")} reportedFamily={fontFamilyName} renderedFamily={PreviewText.FontFamily.Source} reportedDip={fontSizeDip:F2} resolvedDip={sourceSize:F2} renderedDip={PreviewText.FontSize:F2} sourceDpi={targetDpi} overlayScale={overlayScale:F2} caretPixels={caretHeightPx} textPixels={PreviewText.DesiredSize.Height * overlayScale:F2} weight={fontWeight} italic={fontItalic}";
         if (animateFirstAppearance || fontDiagnostic != _lastFontDiagnostic)
         {
             Trace.WriteLine("Font metrics: " + fontDiagnostic);
