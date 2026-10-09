@@ -6,7 +6,6 @@ namespace LayoutPreviewPrototype;
 public sealed class LayoutPreviewController : IDisposable
 {
     private readonly PreviewWindow _preview = new();
-    private long _fontWaitStarted = -1;
     private readonly SessionDiagnostics _diagnostics = new();
     private SessionInputLog? _inputLog;
     private SessionInputLog InputLog => _inputLog ??= new SessionInputLog(_diagnostics);
@@ -82,7 +81,6 @@ public sealed class LayoutPreviewController : IDisposable
         EndDiagnosticSession("Новая сессия заменила предыдущую: " + reason);
         InputLog.Start();
         _editorAvailability.Reset();
-        _fontWaitStarted = -1;
         _debugConfirmed = ""; _debugState = "Ожидание подтверждения";
         _diagnostics.Start(reason, offset);
         _debugApplication = "Неизвестное приложение";
@@ -468,7 +466,6 @@ public sealed class LayoutPreviewController : IDisposable
             if (TextEditor.TryRead(out var focused))
             {
                 _editorAvailability.Reset();
-        _fontWaitStarted = -1;
                 if (!TextEditor.SameEditor(_acceptedEditor, focused))
                 { _acceptedInput.Disarm(); _acceptedEditor = null; _watch.Stop(); }
                 else _acceptedEditor = _acceptedEditor with { CapturedAt = focused.CapturedAt };
@@ -497,7 +494,6 @@ public sealed class LayoutPreviewController : IDisposable
         bool recovered = _editorAvailability.Waiting;
         if (recovered) Diagnostic("Редактор доступен", $"Снимок восстановлен после {_editorAvailability.Duration(Environment.TickCount64)} мс; требуется подтверждение всей сессии");
         _editorAvailability.Reset();
-        _fontWaitStarted = -1;
         if (_editor == null || !TextEditor.SameEditor(_editor, current))
         {
             Diagnostic("Контекст изменился", EditorContextDiagnostics.Describe(_editor, current));
@@ -559,13 +555,6 @@ public sealed class LayoutPreviewController : IDisposable
             _visible = false;
             if (_keyboard != null) _keyboard.AcceptContext = null;
             _preview.HidePreview();
-            return;
-        }
-        if (PreviewMetrics.ShouldWaitForFont(current.FontSource, _hasAppeared, Environment.TickCount64, ref _fontWaitStarted))
-        {
-            _debugState = "Текст подтверждён; ожидается устойчивый размер подсказки";
-            _visible = false;
-            if (_keyboard != null) _keyboard.AcceptContext = null;
             return;
         }
         if (_visible && text == _lastPreview && caret.Left == _lastCaret.Left && caret.Top == _lastCaret.Top &&
@@ -838,7 +827,6 @@ public sealed class LayoutPreviewController : IDisposable
     {
         EndDiagnosticSession(reason + $" ({caller})");
         _editorAvailability.Reset();
-        _fontWaitStarted = -1;
         _debugConfirmed = "";
         _lastVerifiedRevision = -1;
         _lastVerifiedSource = "";

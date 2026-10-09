@@ -11,6 +11,7 @@ internal sealed class UiaTextEditor : IDisposable
     private const int MaximumText = 65536;
     private readonly UiaRangeFont _rangeFont = new();
     private int _rangeExperimentRevision = -1;
+    private bool _initialRangeProbeUsed;
     public UiaTextEditor() { _rangeFont.StatusChanged += RangeFontExperiment.Report; }
     private string _nativeCaptureFailure = "Native-снимок недоступен";
     private string _lastCaptureFailure = "Снимок ещё не получен";
@@ -130,18 +131,21 @@ internal sealed class UiaTextEditor : IDisposable
         FontWeightValue = source.FontWeightValue, FontItalic = source.FontItalic, FontSource = source.FontSource
     };
 
-    private EditorSnapshot WithFormatting(EditorSnapshot context, bool presentation, Func<EditorSnapshot> read)
+    private EditorSnapshot WithFormatting(EditorSnapshot context, bool presentation, Func<EditorSnapshot> read, bool initialRangeProbe = false)
     {
         int generation = Volatile.Read(ref _focusGeneration);
         if (_rangeExperimentRevision != RangeFontExperiment.Revision)
         { _rangeExperimentRevision = RangeFontExperiment.Revision; _formattingSnapshot = null; _formattingAt = 0; }
         bool sameContext = _formattingSnapshot != null && _formattingGeneration == generation &&
             TextEditor.SameEditor(context, _formattingSnapshot) && context.Dpi == _formattingSnapshot.Dpi;
-        if (!sameContext) _formattingSnapshot = null;
+        if (!sameContext) { _formattingSnapshot = null; _initialRangeProbeUsed = false; }
+        bool earlyRangeProbe = initialRangeProbe && !_initialRangeProbeUsed;
         // Text/caret polling and acceptance never depend on these slower attributes.
-        // Refresh at most twice per second, including after an unsupported response.
-        if (presentation && (!sameContext || Environment.TickCount64 - _formattingAt >= 500))
+        // Refresh twice per second, with one early bootstrap probe at two characters.
+        // This runs on the worker; it never waits on the keyboard/UI thread.
+        if (presentation && (!sameContext || earlyRangeProbe || Environment.TickCount64 - _formattingAt >= 500))
         {
+            if (earlyRangeProbe) _initialRangeProbeUsed = true;
             using var measurement = PerformanceDiagnostics.Measure("formatting");
             _formattingAt = Environment.TickCount64;
             _formattingGeneration = generation;
@@ -464,7 +468,7 @@ internal sealed class UiaTextEditor : IDisposable
                 var styled = context with { FontSizeDip = ReadFontSizeDip(formatting), FontFamilyName = ReadFontFamilyName(formatting),
                     FontWeightValue = ReadFontWeight(formatting), FontItalic = ReadFontItalic(formatting), FontSource = ReadUiaFontSource(focused, editableElement) };
                 return _rangeFont.Enrich(styled, selectedRange, Volatile.Read(ref _focusGeneration));
-            });
+            }, _rangeFont.NeedsInitialProbe(context with { FontSource = _formattingSnapshot?.FontSource ?? "" }));
             return true;
         }
         catch (Exception e) when (e is InvalidOperationException or COMException or ArgumentException or System.ComponentModel.Win32Exception or ElementNotAvailableException)

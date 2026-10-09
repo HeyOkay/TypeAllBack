@@ -42,14 +42,6 @@ internal static class PreviewMetrics
         return Math.Clamp(lineLimit, 8, 40);
     }
 
-    // Wait only before the first visible preview; typing and session tracking continue.
-    public static bool ShouldWaitForFont(string source, bool hasAppeared, long now, ref long waitStarted)
-    {
-        if (hasAppeared || !source.Contains("; range=pending", StringComparison.Ordinal)) return false;
-        if (waitStarted < 0) waitStarted = now;
-        return now - waitStarted < 1100;
-    }
-
     public static double OverlayScaleRatio(uint sourceDpi, double overlayScale) =>
         (sourceDpi == 0 ? 1 : sourceDpi / 96.0) /
         (double.IsFinite(overlayScale) && overlayScale > 0 ? overlayScale : 1);

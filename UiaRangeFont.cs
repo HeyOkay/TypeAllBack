@@ -25,12 +25,19 @@ internal static class RangeFontExperiment
 internal sealed class UiaRangeFont
 {
     private string _context = "";
-    private int _revision = -1, _attempts, _matches;
+    private int _revision = -1, _attempts;
     private long _lastAttempt;
-    private double _candidate, _stable, _lastMs;
+    private double _stable, _lastMs;
     public string Status { get; private set; } = "Оценка ещё не выполнялась";
     private string? _lastStatus;
     public event Action<string>? StatusChanged;
+
+    // One early probe when the field first has two measurable characters;
+    // subsequent failed attempts retain the 500 ms cooldown and six-attempt cap.
+    internal bool NeedsInitialProbe(EditorSnapshot snapshot) => RangeFontExperiment.Enabled &&
+        _attempts == 0 && _stable == 0 && snapshot.SelectionStart == snapshot.SelectionEnd &&
+        snapshot.SelectionEnd >= 2 && snapshot.AutomationIdentity.Length > 0 &&
+        !snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal);
 
     public EditorSnapshot Enrich(EditorSnapshot snapshot, TextPatternRange caret, int generation)
     {
@@ -42,34 +49,31 @@ internal sealed class UiaRangeFont
         if (context != _context || _revision != RangeFontExperiment.Revision)
         {
             _context = context; _revision = RangeFontExperiment.Revision;
-            _attempts = _matches = 0; _candidate = _stable = 0; _lastAttempt = 0;
+            _attempts = 0; _stable = 0; _lastAttempt = 0;
         }
         if (_stable > 0) return Apply(snapshot);
         long now = Environment.TickCount64;
-        if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < 3)
-            return _attempts < 6 ? Pending(snapshot) : snapshot;
+        if (_attempts >= 6 || now - _lastAttempt < 500 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < 2)
+            return snapshot;
         _lastAttempt = now;
         long started = Stopwatch.GetTimestamp();
         try
         {
-            // Long enough to be useful: a new field need not spend all attempts
-            // on one/two characters before the user reaches a measurable prefix.
+            // Compare nested ranges in the same capture, rather than showing a
+            // fallback and waiting for another temporal confirmation.
             _attempts++;
             var longer = Read(caret, Math.Min(8, snapshot.SelectionEnd));
-            if (longer == null || longer.Value.Text.Length < 3) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
+            if (longer == null || longer.Value.Text.Length < 2) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
             if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
             { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 6; return snapshot; }
-            var shorter = Read(caret, 2);
-            if (shorter == null) { SetStatus("Диапазон 2 символов недоступен"); return snapshot; }
+            var shorter = Read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
+            if (shorter == null) { SetStatus("Короткий контрольный диапазон недоступен"); return snapshot; }
             double size = Estimate(longer.Value.Text, longer.Value.Bounds, shorter.Value.Text, shorter.Value.Bounds,
                 snapshot.Dpi, snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic);
             if (size == 0) { SetStatus("Границы диапазонов не подтверждают размер; сохранён fallback"); return snapshot; }
-            if (_candidate > 0 && Math.Abs(size-_candidate) <= _candidate * 0.08) _matches++;
-            else _matches = 1;
-            _candidate = size;
-            if (_matches >= 2) _stable = size;
-            SetStatus($"rangeDip={size:F2}; подтверждений={_matches}/2; family={(snapshot.FontFamilyName.Length == 0 ? "Segoe UI fallback" : snapshot.FontFamilyName)}");
-            return _stable > 0 ? Apply(snapshot) : Pending(snapshot);
+            _stable = size;
+            SetStatus($"rangeDip={size:F2}; согласованы 2 диапазона; family={(snapshot.FontFamilyName.Length == 0 ? "Segoe UI fallback" : snapshot.FontFamilyName)}");
+            return Apply(snapshot);
         }
         catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException or ElementNotAvailableException)
         { SetStatus("Диапазон недоступен: " + e.GetType().Name); return snapshot; }
@@ -82,8 +86,6 @@ internal sealed class UiaRangeFont
         }
     }
 
-    private static EditorSnapshot Pending(EditorSnapshot snapshot) => snapshot with
-    { FontSource = snapshot.FontSource + "; range=pending" };
     private void SetStatus(string value) => Status = value;
     private EditorSnapshot Apply(EditorSnapshot snapshot) => snapshot with
     {
@@ -96,7 +98,7 @@ internal sealed class UiaRangeFont
         var range = caret.Clone();
         range.MoveEndpointByUnit(TextPatternRangeEndpoint.Start, TextUnit.Character, -length);
         string text = range.GetText(9);
-        if (text.Length is < 2 or > 8 || text.Any(c => !char.IsLetterOrDigit(c) && c != ' ')) return null;
+        if (text.Length is < 1 or > 8 || text.Any(c => !char.IsLetterOrDigit(c) && c != ' ')) return null;
         var bounds = range.GetBoundingRectangles();
         return bounds.Length == 1 ? (text, bounds[0]) : null;
     }

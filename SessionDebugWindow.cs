@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
@@ -96,7 +96,7 @@ internal sealed class SessionDebugWindow : Window
         {
             Content = "Эксперимент: размер шрифта по UIA-диапазонам", IsChecked = RangeFontExperiment.Enabled,
             Margin = new Thickness(0, 4, 0, 8),
-            ToolTip = "До 6 попыток на контекст, не чаще 2 раз/сек; после 2 согласованных оценок — кэш. Переключение завершает текущую сессию."
+            ToolTip = "Первый замер после 2 символов; 2 согласованных диапазона — кэш. До 6 попыток, повторные не чаще 2 раз/сек. Переключение завершает текущую сессию."
         };
         fontExperiment.Checked += (_, _) => RangeFontExperiment.SetEnabled(true);
         fontExperiment.Unchecked += (_, _) => RangeFontExperiment.SetEnabled(false);
