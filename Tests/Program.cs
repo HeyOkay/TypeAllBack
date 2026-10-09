@@ -1,6 +1,7 @@
-﻿using LayoutPreviewPrototype;
+using LayoutPreviewPrototype;
 using System.Runtime.InteropServices;
 using System.Text;
+if (args.Contains("--debug-history-benchmark")) { DebugHistoryBenchmark.Run(); return; }
 if (args.Contains("--shell-discovery-smoke"))
 {
     ShellDiscoverySmokeTests.Run();
@@ -687,6 +688,32 @@ Eq(pendingSections.SourceLayout,KeyboardLayout.English,"queued section uses late
 Eq(pendingSections.ActiveStart,3,"queued switch records exact section boundary");
 Eq(pendingSections.Replacement,"припри","queued replacement preserves the earlier section");
 Eq(pendingSections.CreateActiveReplacement("приghb",6,6)!.Source,"ghb","queued transaction selects only the current section");
+Exception? historyError=null;
+var historyThread=new Thread(()=> {
+ try {
+  var box=new System.Windows.Controls.RichTextBox {IsReadOnly=true,IsUndoEnabled=false};
+  var renderer=new IncrementalHistory(box);
+  var a=new SessionDiagnosticEvent(1,DateTime.Now,1,"Начало","a");
+  var b=new SessionDiagnosticEvent(2,DateTime.Now,1,"Ввод","b");
+  var c=new SessionDiagnosticEvent(3,DateTime.Now,1,"Окончание","c");
+  renderer.Update(new[]{a,b,c},1);
+  var retained=box.Document.Blocks.FirstBlock;
+  renderer.Update(new[]{a,b,c},1);
+  Eq(ReferenceEquals(retained,box.Document.Blocks.FirstBlock),true,"unchanged log reuses existing paragraph objects");
+  renderer.Update(new[]{a,c},1);
+  renderer.Update(new[]{a,b,c},1);
+  Eq(new System.Windows.Documents.TextRange(box.Document.ContentStart,box.Document.ContentEnd).Text.IndexOf("Ввод") < new System.Windows.Documents.TextRange(box.Document.ContentStart,box.Document.ContentEnd).Text.IndexOf("Окончание"),true,"filter restore preserves chronological insertion");
+  renderer.Update(new[]{b,c},1);
+  Eq(box.Document.Blocks.Count,2,"evicted diagnostic entries release paragraph references");
+  var current=new SessionDiagnosticEvent(4,DateTime.Now,2,"Начало","new");
+  renderer.Update(new[]{a,b,c,current},2);
+  var first=(System.Windows.Documents.Paragraph)box.Document.Blocks.FirstBlock;
+  Eq(((System.Windows.Media.SolidColorBrush)((System.Windows.Documents.Run)first.Inlines.FirstInline).Foreground).Color,System.Windows.Media.Color.FromRgb(70,150,70),"new session dims previous start without rebuilding history");
+  Eq(box.IsUndoEnabled,false,"readonly log retains no undo snapshots");
+ }catch(Exception error){historyError=error;}
+});
+historyThread.SetApartmentState(ApartmentState.STA);historyThread.Start();historyThread.Join();
+if(historyError!=null)throw historyError;
 int experimentChanges=0;
 RangeFontExperiment.Changed += _ => experimentChanges++;
 RangeFontExperiment.SetEnabled(false);

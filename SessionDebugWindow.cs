@@ -21,7 +21,7 @@ internal sealed class SessionDebugWindow : Window
     private readonly TextBox _lastSession = TextField();
     private readonly RichTextBox _history = new()
     {
-        IsReadOnly = true, IsReadOnlyCaretVisible = true,
+        IsReadOnly = true, IsReadOnlyCaretVisible = true, IsUndoEnabled = false,
         FontFamily = new FontFamily("Consolas"), FontSize = 11,
         Background = new SolidColorBrush(Color.FromRgb(22, 25, 31)), Foreground = Brushes.Gainsboro,
         BorderThickness = new Thickness(0), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -31,6 +31,7 @@ internal sealed class SessionDebugWindow : Window
     private readonly CheckBox _follow = new() { Content = "Следить за событиями", IsChecked = true };
     private readonly CheckBox _pause = new() { Content = "Пауза просмотра" };
     private readonly CheckBox _inputOnly = new() { Content = "Только ввод и границы сессий", Margin = new Thickness(0, 0, 0, 6) };
+    private readonly IncrementalHistory _historyRenderer;
     private SessionDiagnosticFrame? _shown;
     private long _historyRevision = -1;
     private string _shownBoundaries = "";
@@ -39,6 +40,7 @@ internal sealed class SessionDebugWindow : Window
     public SessionDebugWindow(SessionDiagnostics diagnostics, Func<SessionDiagnosticFrame?> capture, SessionStartRules rules)
     {
         _diagnostics = diagnostics; _capture = capture;
+        _historyRenderer = new IncrementalHistory(_history);
         Title = "LayoutPreview — отладка сессии и правила";
         Width = 750; Height = 820; MinWidth = 550; MinHeight = 580;
         ShowActivated = false;
@@ -127,7 +129,7 @@ internal sealed class SessionDebugWindow : Window
         Closing += (_, args) => { if (!_shutdown) { args.Cancel = true; Hide(); } };
     }
 
-    private static TextBox TextField() => new() { IsReadOnly = true, AcceptsReturn = true,
+    private static TextBox TextField() => new() { IsReadOnly = true, IsUndoEnabled = false, AcceptsReturn = true,
         TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), FontSize = 13,
         MinHeight = 42, MaxHeight = 120, Padding = new Thickness(8),
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -168,29 +170,8 @@ internal sealed class SessionDebugWindow : Window
 
     private void RenderHistory(SessionDiagnosticEvent[] events)
     {
-        // Current session boundaries are bright; prior boundaries retain quieter colors.
-        var current = events.Where(entry => entry.SessionId == _diagnostics.SessionId).ToArray();
-        var latestStart = current.LastOrDefault(entry => entry.Kind == "Начало");
-        var latestEnd = current.LastOrDefault(entry => entry.Kind == "Окончание");
-        Brush brightRed = new SolidColorBrush(Color.FromRgb(255, 64, 64));
-        Brush historicalGreen = new SolidColorBrush(Color.FromRgb(70, 150, 70));
-        Brush historicalRed = new SolidColorBrush(Color.FromRgb(184, 92, 92));
         double scrollOffset = _history.VerticalOffset;
-        _history.BeginChange();
-        try
-        {
-            _history.Document.Blocks.Clear();
-            foreach (var entry in events)
-            {
-                Brush color = entry == latestStart ? Brushes.Lime :
-                    entry == latestEnd ? brightRed :
-                    entry.Kind == "Начало" ? historicalGreen :
-                    entry.Kind == "Окончание" ? historicalRed : Brushes.Gainsboro;
-                _history.Document.Blocks.Add(new Paragraph(new Run(entry.ToString()) { Foreground = color })
-                    { Margin = new Thickness(0, 0, 0, 3) });
-            }
-        }
-        finally { _history.EndChange(); }
+        _historyRenderer.Update(events, _diagnostics.SessionId);
         if (_follow.IsChecked == true) _history.ScrollToEnd();
         else _history.ScrollToVerticalOffset(scrollOffset);
     }
