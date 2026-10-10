@@ -3,22 +3,47 @@ param([Parameter(Mandatory=$true)][string]$InstallerPath, [Parameter(Mandatory=$
       [Parameter(Mandatory=$true)][string]$ExpectedSha256, [Parameter(Mandatory=$true)][string]$ReadyFile)
 $ErrorActionPreference = 'Stop'
 $readyWritten = $false
+function Verify-Installer {
+    $inputStream = [IO.File]::OpenRead($InstallerPath)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try { $digest = [BitConverter]::ToString($hasher.ComputeHash($inputStream)).Replace('-','') }
+    finally { $hasher.Dispose(); $inputStream.Dispose() }
+    if ($digest -ne $ExpectedSha256) { throw 'Installer checksum changed' }
+}
+function Start-Application {
+    $launch = [Diagnostics.ProcessStartInfo]::new($TargetExecutable)
+    $launch.UseShellExecute = $false
+    $launch.CreateNoWindow = $true
+    $launch.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $applicationProcess = [Diagnostics.Process]::Start($launch)
+    if ($applicationProcess) { $applicationProcess.Dispose() }
+}
 try {
-    if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Installer checksum changed' }
+    Verify-Installer
     [IO.File]::WriteAllText($ReadyFile, 'ready')
     $readyWritten = $true
-    Wait-Process -Id $ParentProcessId -Timeout 30 -ErrorAction SilentlyContinue
-    if (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue) { throw 'Application did not close' }
-    if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Installer checksum changed' }
-    $installArgs = '/i "' + $InstallerPath + '" /qn /norestart /l*v "' + $LogPath + '"'
-    $setup = Start-Process -FilePath (Join-Path $env:WINDIR 'System32\msiexec.exe') -ArgumentList $installArgs -WindowStyle Hidden -Wait -PassThru
-    if ($setup.ExitCode -notin @(0,3010)) { throw ('Installer exit code: ' + $setup.ExitCode) }
-    if (-not (Test-Path -LiteralPath $TargetExecutable)) { throw 'Installed executable not found' }
-    Start-Process -FilePath $TargetExecutable -WindowStyle Hidden
+    $parent = $null
+    try { $parent = [Diagnostics.Process]::GetProcessById($ParentProcessId) }
+    catch [ArgumentException] { }
+    if ($parent) {
+        try { if (-not $parent.WaitForExit(30000)) { throw 'Application did not close' } }
+        finally { $parent.Dispose() }
+    }
+    Verify-Installer
+    $setupInfo = [Diagnostics.ProcessStartInfo]::new([IO.Path]::Combine([Environment]::GetFolderPath('Windows'),'System32','msiexec.exe'))
+    $setupInfo.Arguments = '/i "' + $InstallerPath + '" /qn /norestart /l*v "' + $LogPath + '"'
+    $setupInfo.UseShellExecute = $false
+    $setupInfo.CreateNoWindow = $true
+    $setupInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $setup = [Diagnostics.Process]::Start($setupInfo)
+    try { $setup.WaitForExit(); $exitCode = $setup.ExitCode } finally { $setup.Dispose() }
+    if ($exitCode -notin @(0,3010)) { throw ('Installer exit code: ' + $exitCode) }
+    if (-not [IO.File]::Exists($TargetExecutable)) { throw 'Installed executable not found' }
+    Start-Application
 } catch {
-    $_.Exception.Message | Out-File -LiteralPath ($LogPath + '.failure.txt') -Encoding utf8
+    [IO.File]::WriteAllText($LogPath + '.failure.txt', $_.Exception.Message, [Text.UTF8Encoding]::new($true))
     if (-not $readyWritten) { exit 1 }
-    if (Test-Path -LiteralPath $TargetExecutable) { Start-Process -FilePath $TargetExecutable -WindowStyle Hidden }
-    Add-Type -AssemblyName PresentationFramework
-    [System.Windows.MessageBox]::Show('Обновление не установлено. Если прежняя версия доступна, она запущена снова. Журнал: ' + $LogPath, 'TypeAllBack', 'OK', 'Error') | Out-Null
+    if ([IO.File]::Exists($TargetExecutable)) { Start-Application }
+    [void][Reflection.Assembly]::Load('PresentationFramework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35')
+    [void][System.Windows.MessageBox]::Show('Обновление не установлено. Если прежняя версия доступна, она запущена снова. Журнал: ' + $LogPath, 'TypeAllBack', 'OK', 'Error')
 }

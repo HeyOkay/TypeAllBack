@@ -1,4 +1,4 @@
-TypeAllBack 0.1.2
+TypeAllBack 0.1.3
 
 - Public repository with PolyForm Noncommercial licensing; separate model-data attribution preserved.
 - Update checks use GitHub Releases. The application downloads the MSI itself, checks SHA-256, installs silently, closes and restarts automatically. No browser redirect is needed.
