@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
 <title>TypeAllBack — keyboard layout correction</title>
 <desc>Product illustration: typed ghbdtn with a caret and a nearby привет suggestion.</desc>
-<defs><linearGradient id="background" x2="0" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient><filter id="fieldShadow" x="-25%" y="-80%" width="150%" height="280%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.55"/></filter></defs>
+<defs><linearGradient id="background" x2="0" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient><filter id="fieldShadow" x="-40%" y="-140%" width="180%" height="380%"><feDropShadow dx="0" dy="10" stdDeviation="36" flood-color="#000000" flood-opacity="0.38"/></filter></defs>
 <rect width="1600" height="520" rx="32" fill="url(#background)"/>
 <svg x="80" y="116" width="120" height="120" viewBox="0 0 256 256">
   <title>TypeAllBack — circular return icon</title>
@@ -35,9 +35,9 @@
 <circle cx="290" cy="400" r="3" fill="#626A77"/>
 <text x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
 <rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#474A52" filter="url(#fieldShadow)"/>
-<text x="1011.00" y="267.50" fill="#F1F1F2" font-size="46">ghbdtn</text>
-<line x1="1163.50" y1="225.00" x2="1163.50" y2="287.00" stroke="#E3E5E9" stroke-width="2"/>
-<rect x="1175.50" y="225.00" width="183.50" height="62.00" rx="12" fill="#34363C" stroke="#64666C" stroke-width="2"/>
-<text x="1193.50" y="262.50" fill="#BEC0C5" font-size="46">привет</text>
+<text x="900.53" y="275.73" fill="#F1F1F2" font-size="44.400000000000006">ghbdtn</text>
+<line x1="1038.67" y1="228.87" x2="1038.67" y2="288.07" stroke="#E3E5E9" stroke-width="2"/>
+<rect x="1051.00" y="216.53" width="172.67" height="83.87" rx="19.73" fill="#34363C" stroke="#64666C" stroke-width="1.2"/>
+<text x="1065.80" y="278.20" fill="#999A9E" font-size="44.400000000000006">привет</text>
 </g>
 </svg>
