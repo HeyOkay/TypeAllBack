@@ -1,8 +1,10 @@
-TypeAllBack 0.1.3
+TypeAllBack 0.1.4 — Chrome freeze hotfix
 
-- Public repository with PolyForm Noncommercial licensing; separate model-data attribution preserved.
-- Update checks use GitHub Releases. The application downloads the MSI itself, checks SHA-256, installs silently, closes and restarts automatically. No browser redirect is needed.
-- License and attribution documents included in the installation.
-- Existing settings and autostart choice are retained.
+- Fixed the reported Chrome freeze when opening a GitHub profile with TypeAllBack running, without clicking or typing. The reporter confirmed that the fix resolved the problem.
+- Replaced desktop-wide UI Automation focus subscriptions with native Windows focus notifications.
+- Chromium windows are no longer probed through UI Automation before keyboard input; confirmed editable fields continue to refresh.
+- Ordinary Chromium web documents are rejected before whole-document text attributes are queried. The protection applies across websites, without a GitHub-specific exception.
 
-Windows 10/11 x64. .NET is included. To move from the original 0.1.0 build, install this MSI once; subsequent updates use the built-in updater.
+603 regression checks passed. Windows 10/11 x64; .NET is included.
+
+Update through the tray menu: “Проверить обновления сейчас”. The application downloads and verifies the installer, closes, installs the update and restarts. Settings are retained. If using the original 0.1.0 build, install the MSI once to enable the built-in updater.

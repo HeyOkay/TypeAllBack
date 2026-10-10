@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$MsiPath, [string]$ProductVersion = '0.1.3')
+param([Parameter(Mandatory=$true)][string]$MsiPath, [string]$ProductVersion = '0.1.4')
 $ErrorActionPreference='Stop'
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $db = $installer.OpenDatabase((Resolve-Path -LiteralPath $MsiPath).Path,0)
