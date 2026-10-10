@@ -1,0 +1,9 @@
+Required Notice: Copyright (c) 2026 HeyOkay.
+
+TypeAllBack original project code is offered under the PolyForm Noncommercial
+License 1.0.0 in LICENSE. Commercial use of that code requires separate prior
+written permission from its copyright holder. Notification alone does not
+constitute permission. No commercial license is granted by this notice.
+
+Separately licensed model data and third-party materials retain their own terms;
+see LICENSING.md and Models/README.md.

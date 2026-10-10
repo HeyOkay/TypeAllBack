@@ -18,6 +18,11 @@
   </PropertyGroup>
 <ItemGroup>
   <Resource Include="Assets\TypeAllBack.ico" />
+  <Content Include="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <Content Include="LICENSE-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <Content Include="LICENSING.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <Content Include="Models\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <Content Include="Models\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   <EmbeddedResource Include="Assets\Correction.wav" LogicalName="TypeAllBack.Correction.wav" />
   <Compile Remove="Tests\**\*.cs" />
   <Compile Remove="Installer\**\*.cs" />
