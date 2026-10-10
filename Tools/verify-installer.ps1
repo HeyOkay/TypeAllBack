@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$MsiPath)
+param([Parameter(Mandatory=$true)][string]$MsiPath, [string]$ProductVersion = '0.1.1')
 $ErrorActionPreference='Stop'
 $installer = New-Object -ComObject WindowsInstaller.Installer
 $db = $installer.OpenDatabase((Resolve-Path -LiteralPath $MsiPath).Path,0)
@@ -18,7 +18,7 @@ function Read-Rows([string]$query) {
 try {
   $props=@{}
   foreach ($row in Read-Rows 'SELECT `Property`, `Value` FROM `Property`') { $props[$row[0]]=$row[1] }
-  if ($props.ProductName -ne 'TypeAllBack' -or $props.ProductVersion -ne '0.1.0') { throw 'Incorrect product identity' }
+  if ($props.ProductName -ne 'TypeAllBack' -or $props.ProductVersion -ne $ProductVersion) { throw 'Incorrect product identity' }
   if ($props.ALLUSERS) { throw 'Package is not strictly per-user' }
   if ($props.UpgradeCode -ne '{B43F914B-3100-4C9B-A9A1-BD9F5E8BD4CA}') { throw 'Upgrade identity changed' }
   $files=@(Read-Rows 'SELECT `FileName` FROM `File`')

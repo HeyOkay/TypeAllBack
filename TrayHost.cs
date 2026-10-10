@@ -13,7 +13,8 @@ internal sealed class TrayHost : IDisposable
     private readonly TrayNative _icon;
     private readonly UpdateChecker _updates = new();
     private readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromHours(24) };
-    private bool _disposed;
+    private bool _disposed, _updating;
+    private string Feed => string.IsNullOrWhiteSpace(_settings.UpdateFeedUrl) ? UpdateChecker.DefaultFeed : _settings.UpdateFeedUrl;
     internal TrayHost(TraySettings settings, Action<bool> enabled, Action debug, CorrectionSound sound)
     {
         _settings = settings;
@@ -24,25 +25,27 @@ internal sealed class TrayHost : IDisposable
         _menu.AddCommand("Отладка…", debug);
         _menu.Separator();
         _menu.AddToggle("Запускать с Windows", AutoStartEnabled, SetAutoStart);
-        _menu.AddToggle("Проверять обновления", () => settings.CheckUpdates, value => { settings.CheckUpdates = value; settings.Save(); if (value && UpdateChecker.Https(settings.UpdateFeedUrl, out _)) _ = CheckUpdates(false); });
+        _menu.AddToggle("Проверять обновления", () => settings.CheckUpdates, value => { settings.CheckUpdates = value; settings.Save(); if (value && UpdateChecker.Https(Feed, out _)) _ = CheckUpdates(false); });
         _menu.AddCommand("Проверить обновления сейчас", () => _ = CheckUpdates(true));
         _menu.Separator();
         _menu.AddCommand("Выйти", () => Application.Current.Shutdown());
         _icon = new TrayNative(_menu.ShowAtCursor);
         _updateTimer.Tick += (_, _) => { if (settings.CheckUpdates) _ = CheckUpdates(false); };
         _updateTimer.Start();
-        if (settings.CheckUpdates && UpdateChecker.Https(settings.UpdateFeedUrl, out _)) _ = CheckUpdates(false);
+        if (settings.CheckUpdates && UpdateChecker.Https(Feed, out _)) _ = CheckUpdates(false);
     }
     private async Task CheckUpdates(bool manual)
     {
-        var result = await _updates.CheckAsync(_settings.UpdateFeedUrl);
-        if (_disposed || result == null || (!manual && (! _settings.CheckUpdates || result.ReleasePage == null))) return;
-        if (result.ReleasePage is { } page)
+        if (_updating || _disposed) return;
+        var result = await _updates.CheckAsync(Feed);
+        if (_disposed || result == null || (!manual && (! _settings.CheckUpdates || result.Package == null))) return;
+        if (result.Package is { } package)
         {
             if (MessageBox.Show(result.Message, "TypeAllBack", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
             {
-                try { Process.Start(new ProcessStartInfo(page.AbsoluteUri) { UseShellExecute = true }); }
-                catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { MessageBox.Show("Не удалось открыть страницу загрузки.", "TypeAllBack"); }
+                _updating = true;
+                try { new UpdateWindow(_updates, package).ShowDialog(); }
+                finally { _updating = false; }
             }
         }
         else MessageBox.Show(result.Message, "TypeAllBack", MessageBoxButton.OK, MessageBoxImage.Information);

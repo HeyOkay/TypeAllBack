@@ -1,0 +1,37 @@
+name: Release installer
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-2025
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and check
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release tag' }
+          dotnet build LayoutPreviewPrototype.csproj -c Debug --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          dotnet run --project Tests/LayoutPreview.Tests.csproj -c Debug
+          if ($LASTEXITCODE -ne 0) { throw 'Checks failed' }
+          .\Tools\build-release.ps1 -ProductVersion $version
+          .\Tools\verify-installer.ps1 -MsiPath "artifacts/installer-$version/TypeAllBack-$version-win-x64.msi" -ProductVersion $version
+      - name: Publish release
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $msi = "artifacts/installer-$version/TypeAllBack-$version-win-x64.msi"
+          $hash = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText('SHA256.txt', "$hash  TypeAllBack-$version-win-x64.msi`n", [Text.UTF8Encoding]::new($false))
+          gh release create $env:RELEASE_TAG $msi SHA256.txt --verify-tag --title "TypeAllBack $version" --notes-file RELEASE-NOTES.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

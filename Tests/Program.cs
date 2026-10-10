@@ -750,10 +750,10 @@ Eq(new TraySettings().AutoEnter,true,"new settings enable Enter correction");
 Eq(UpdateChecker.Https("http://example.com/feed",out _),false,"update transport requires HTTPS");
 Eq(UpdateChecker.Https("https://user:secret@example.com/feed",out _),false,"update URLs reject credentials");
 Eq(UpdateChecker.Parse("{\"version\":\"1.0.0\"}",new Version(1,0,0)).ReleasePage,null,"current version does not offer download");
-Eq(UpdateChecker.Parse("{\"version\":\"2.0.0\",\"releasePage\":\"https://example.com/releases\"}",new Version(1,0,0)).ReleasePage!.Scheme,"https","new version offers checked HTTPS page");
+Eq(UpdateChecker.Parse("{\"version\":\"2.0.0\",\"releasePage\":\"https://example.com/releases\",\"downloadUrl\":\"https://github.com/HeyOkay/TypeAllBack/releases/download/v2.0.0/TypeAllBack-2.0.0-win-x64.msi\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"size\":100}",new Version(1,0,0)).ReleasePage!.Scheme,"https","new version offers checked HTTPS page");
 bool rejectedPage=false;
 try { UpdateChecker.Parse("{\"version\":\"2.0.0\",\"releasePage\":\"file:///C:/bad.exe\"}",new Version(1,0,0)); }
-catch(System.IO.InvalidDataException){rejectedPage=true;}
+catch(Exception error) when(error is System.IO.InvalidDataException or KeyNotFoundException){rejectedPage=true;}
 Eq(rejectedPage,true,"remote manifest cannot launch local file");
 using(var pausedEditor = new UiaTextEditor())
 {
@@ -763,4 +763,14 @@ using(var pausedEditor = new UiaTextEditor())
     pausedEditor.SetPaused(false);
     Eq(pausedEditor.IsPaused,false,"worker pause can be reversed");
 }
+Eq(UpdateChecker.Parse("{\"version\":\"1.0.0\"}",new Version(1,0,0,0)).Package,null,"three and four part versions compare equally");
+Eq(UpdateChecker.DownloadAllowed(new Uri("https://github.com/HeyOkay/TypeAllBack/releases/download/v1.2.3/app.msi")),true,"owned release MSI download accepted");
+Eq(UpdateChecker.DownloadAllowed(new Uri("https://github.com/Other/Repo/releases/download/v1/app.msi")),false,"foreign repository download rejected");
+Eq(UpdateChecker.DownloadAllowed(new Uri("file:///C:/fake.msi")),false,"local installer URL rejected");
+string releaseFixture="{\"tag_name\":\"v2.0.0\",\"html_url\":\"https://github.com/HeyOkay/TypeAllBack/releases/tag/v2.0.0\",\"draft\":false,\"prerelease\":false,\"assets\":[{\"name\":\"TypeAllBack-2.0.0-win-x64.msi\",\"browser_download_url\":\"https://github.com/HeyOkay/TypeAllBack/releases/download/v2.0.0/TypeAllBack-2.0.0-win-x64.msi\",\"digest\":\"sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"size\":100}]}";
+Eq(UpdateChecker.Parse(releaseFixture,new Version(1,0,0)).Package!.Size,100L,"GitHub release asset size retained");
+bool rejectedDigest=false;
+try{UpdateChecker.Parse(releaseFixture.Replace("sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","invalid"),new Version(1,0,0));}catch(System.IO.InvalidDataException){rejectedDigest=true;}
+Eq(rejectedDigest,true,"installer without verifiable digest rejected");
+UpdateDownloadTests.Run((okay,name)=>Eq(okay,true,name));
 Console.WriteLine($"PASS: {checks} regression checks");

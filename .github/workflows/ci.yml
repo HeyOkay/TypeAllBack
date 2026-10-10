@@ -1,0 +1,17 @@
+name: Build and checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build LayoutPreviewPrototype.csproj -c Debug --nologo
+      - run: dotnet run --project Tests/LayoutPreview.Tests.csproj -c Debug
