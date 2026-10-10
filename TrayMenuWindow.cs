@@ -5,44 +5,53 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shell;
 
 namespace LayoutPreviewPrototype;
 
 internal sealed class TrayMenuWindow : Window
 {
-    private readonly StackPanel _items = new() { Margin = new Thickness(8) };
+    private readonly StackPanel _items = new() { Margin = new Thickness(4) };
     private readonly WindowsPreviewTheme _theme;
     private readonly List<(ToggleButton Button, TextBlock Mark, Func<bool> Read)> _toggles = [];
     private readonly List<TextBlock> _labels = [];
     private IntPtr _hwnd;
     private bool _dark;
+    private readonly List<Border> _separators = [];
+    private readonly FontFamily _icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
     internal TrayMenuWindow()
     {
-        Title = "TypeAllBack"; Width = 292; SizeToContent = SizeToContent.Height;
+        Title = "TypeAllBack"; MinWidth = 230; MaxWidth = 360; SizeToContent = SizeToContent.WidthAndHeight;
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false; Topmost = true; Background = Brushes.Transparent;
-        FontFamily = new FontFamily("Segoe UI"); FontSize = 13;
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"); FontSize = 13;
         WindowChrome.SetWindowChrome(this, new WindowChrome { CaptionHeight = 0, ResizeBorderThickness = new Thickness(0), GlassFrameThickness = new Thickness(-1), CornerRadius = new CornerRadius(8), UseAeroCaptionButtons = false });
         var root = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Child = _items };
         Content = root;
+        Resources["MenuHover"] = new SolidColorBrush(Color.FromArgb(26, 255, 255, 255));
         Resources[typeof(ButtonBase)] = System.Windows.Markup.XamlReader.Parse("""
           <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ButtonBase">
-            <Setter Property="MinHeight" Value="38"/><Setter Property="Padding" Value="12,7"/>
+            <Setter Property="MinHeight" Value="30"/><Setter Property="Padding" Value="8,6,10,6"/>
+            <Setter Property="Margin" Value="0,1"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ButtonBase">
-              <Border x:Name="Plate" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+              <Border x:Name="Plate" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
                 <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
               </Border><ControlTemplate.Triggers>
-                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Plate" Property="Background" Value="#187F7F7F"/></Trigger>
-                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Plate" Property="Background" Value="#247F7F7F"/></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Plate" Property="Background" Value="{DynamicResource MenuHover}"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Plate" Property="Background" Value="{DynamicResource MenuHover}"/></Trigger>
                 <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
               </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
           </Style>
           """);
-        var heading = new TextBlock { Text = "TypeAllBack", FontWeight = FontWeights.SemiBold, FontSize = 14, Margin = new Thickness(12, 9, 12, 10) };
-        _labels.Add(heading); _items.Children.Add(heading);
+        var heading = new StackPanel { Margin = new Thickness(8, 8, 10, 8) };
+        var title = new TextBlock { Text = "TypeAllBack", FontWeight = FontWeights.SemiBold, FontSize = 13 };
+        var detail = new TextBlock { Text = "Исправление раскладки", FontSize = 12, Margin = new Thickness(0, 2, 0, 0), Opacity = .6 };
+        _labels.Add(title); _labels.Add(detail);
+        heading.Children.Add(title); heading.Children.Add(detail); _items.Children.Add(heading);
+        Separator();
         SourceInitialized += (_, _) =>
         {
             _hwnd = new WindowInteropHelper(this).Handle;
@@ -54,9 +63,11 @@ internal sealed class TrayMenuWindow : Window
         _theme = new WindowsPreviewTheme(Dispatcher, palette =>
         {
             _dark = palette.Mode == PreviewThemeMode.Dark;
-            Foreground = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : _dark ? Brushes.WhiteSmoke : new SolidColorBrush(Color.FromRgb(35, 35, 35));
-            root.BorderBrush = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(_dark ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(35, 0, 0, 0));
+            Foreground = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : _dark ? Brushes.WhiteSmoke : new SolidColorBrush(Color.FromRgb(26, 26, 26));
+            root.BorderBrush = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(_dark ? Color.FromArgb(51, 255, 255, 255) : Color.FromArgb(38, 0, 0, 0));
             foreach (var label in _labels) label.Foreground = Foreground;
+            Resources["MenuHover"] = SystemParameters.HighContrast ? SystemColors.HighlightBrush : new SolidColorBrush(_dark ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(18, 0, 0, 0));
+            foreach (var line in _separators) line.Background = new SolidColorBrush(_dark ? Color.FromArgb(38, 255, 255, 255) : Color.FromArgb(26, 0, 0, 0));
             ApplyBackdrop();
         });
         Closed += (_, _) => _theme.Dispose();
@@ -64,7 +75,8 @@ internal sealed class TrayMenuWindow : Window
     internal void AddToggle(string label, Func<bool> read, Action<bool> set)
     {
         var button = new ToggleButton { Style = (Style)Resources[typeof(ButtonBase)] };
-        var mark = new TextBlock { Text = "✓", Width = 24, FontSize = 14 };
+        var mark = new TextBlock { Text = "\uE73E", FontFamily = _icons, Width = 24, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = Foreground };
+        _labels.Add(mark);
         button.Content = Row(label, mark);
         System.Windows.Automation.AutomationProperties.SetName(button, label);
         button.Click += (_, _) => { set(button.IsChecked == true); Refresh(); };
@@ -83,7 +95,11 @@ internal sealed class TrayMenuWindow : Window
         var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Foreground = Foreground };
         _labels.Add(text); row.Children.Add(text); return row;
     }
-    internal void Separator() => _items.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(40, 128, 128, 128)), Margin = new Thickness(12, 6, 12, 6) });
+    internal void Separator()
+    {
+        var line = new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(26, 0, 0, 0)), Margin = new Thickness(8, 4, 8, 4) };
+        _separators.Add(line); _items.Children.Add(line);
+    }
     private void Refresh()
     {
         foreach (var (button, mark, read) in _toggles) { button.IsChecked = read(); mark.Visibility = button.IsChecked == true ? Visibility.Visible : Visibility.Hidden; }
@@ -99,10 +115,16 @@ internal sealed class TrayMenuWindow : Window
         SetWindowPos(_hwnd, IntPtr.Zero, point.X, point.Y, 0, 0, 0x0015);
         Show(); UpdateLayout();
         GetWindowRect(_hwnd, out var rect);
-        int x = Math.Max(info.Work.Left, Math.Min(point.X, info.Work.Right - (rect.Right - rect.Left)));
-        int y = Math.Max(info.Work.Top, Math.Min(point.Y - (rect.Bottom - rect.Top), info.Work.Bottom - (rect.Bottom - rect.Top)));
+        double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        int gap = (int)Math.Round(8 * scale);
+        int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
+        int x = Math.Max(info.Work.Left, Math.Min(point.X - width / 2, info.Work.Right - width));
+        int y = Math.Max(info.Work.Top, Math.Min(point.Y - height - gap, info.Work.Bottom - height - gap));
         SetWindowPos(_hwnd, IntPtr.Zero, x, y, 0, 0, 0x0015);
         SetForegroundWindow(_hwnd); Activate();
+        if (!SystemParameters.HighContrast && SystemParameters.MenuAnimation)
+            _items.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+        else _items.BeginAnimation(OpacityProperty, null);
         if (_items.Children.OfType<ButtonBase>().FirstOrDefault() is { } first) first.Focus();
     }
     private void ApplyBackdrop()
