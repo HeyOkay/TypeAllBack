@@ -32,7 +32,7 @@ internal sealed class TrayMenuWindow : Window
         Resources["MenuHover"] = new SolidColorBrush(Color.FromArgb(26, 255, 255, 255));
         Resources[typeof(ButtonBase)] = System.Windows.Markup.XamlReader.Parse("""
           <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ButtonBase">
-            <Setter Property="MinHeight" Value="30"/><Setter Property="Padding" Value="8,6,10,6"/>
+            <Setter Property="MinHeight" Value="0"/><Setter Property="Padding" Value="8,6,10,6"/>
             <Setter Property="Margin" Value="0,1"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Background" Value="Transparent"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ButtonBase">
@@ -46,9 +46,9 @@ internal sealed class TrayMenuWindow : Window
             </ControlTemplate></Setter.Value></Setter>
           </Style>
           """);
-        var heading = new StackPanel { Margin = new Thickness(8, 8, 10, 8) };
-        var title = new TextBlock { Text = "TypeAllBack", FontWeight = FontWeights.SemiBold, FontSize = 13 };
-        var detail = new TextBlock { Text = "Исправление раскладки", FontSize = 12, Margin = new Thickness(0, 2, 0, 0), Opacity = .6 };
+        var heading = new StackPanel { Margin = new Thickness(32, 8, 10, 8) };
+        var title = new TextBlock { Text = "TypeAllBack", FontWeight = FontWeights.Normal, FontSize = 13 };
+        var detail = new TextBlock { Text = "Исправление раскладки", FontSize = 13, Margin = new Thickness(0, 2, 0, 0), Opacity = .6 };
         _labels.Add(title); _labels.Add(detail);
         heading.Children.Add(title); heading.Children.Add(detail); _items.Children.Add(heading);
         Separator();
@@ -63,7 +63,8 @@ internal sealed class TrayMenuWindow : Window
         _theme = new WindowsPreviewTheme(Dispatcher, palette =>
         {
             _dark = palette.Mode == PreviewThemeMode.Dark;
-            Foreground = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : _dark ? Brushes.WhiteSmoke : new SolidColorBrush(Color.FromRgb(26, 26, 26));
+            Foreground = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : _dark ? new SolidColorBrush(Color.FromRgb(242, 242, 242)) : new SolidColorBrush(Color.FromRgb(26, 26, 26));
+            root.BorderThickness = new Thickness(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) ? 0 : 1);
             root.BorderBrush = palette.Mode == PreviewThemeMode.HighContrast ? SystemColors.WindowTextBrush : new SolidColorBrush(_dark ? Color.FromArgb(51, 255, 255, 255) : Color.FromArgb(38, 0, 0, 0));
             foreach (var label in _labels) label.Foreground = Foreground;
             Resources["MenuHover"] = SystemParameters.HighContrast ? SystemColors.HighlightBrush : new SolidColorBrush(_dark ? Color.FromArgb(26, 255, 255, 255) : Color.FromArgb(18, 0, 0, 0));
@@ -75,7 +76,7 @@ internal sealed class TrayMenuWindow : Window
     internal void AddToggle(string label, Func<bool> read, Action<bool> set)
     {
         var button = new ToggleButton { Style = (Style)Resources[typeof(ButtonBase)] };
-        var mark = new TextBlock { Text = "\uE73E", FontFamily = _icons, Width = 24, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Foreground = Foreground };
+        var mark = new TextBlock { Text = "\uE73E", FontFamily = _icons, Width = 24, FontSize = 12, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Foreground };
         _labels.Add(mark);
         button.Content = Row(label, mark);
         System.Windows.Automation.AutomationProperties.SetName(button, label);
@@ -118,8 +119,28 @@ internal sealed class TrayMenuWindow : Window
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
         int gap = (int)Math.Round(8 * scale);
         int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
-        int x = Math.Max(info.Work.Left, Math.Min(point.X - width / 2, info.Work.Right - width));
-        int y = Math.Max(info.Work.Top, Math.Min(point.Y - height - gap, info.Work.Bottom - height - gap));
+        int x = point.X - width / 2, y = point.Y - height - gap;
+        var work = info.Work;
+        if (TaskbarRect(info.Monitor) is { } bar)
+        {
+            if (bar.Right - bar.Left > bar.Bottom - bar.Top)
+            {
+                bool bottom = bar.Top > info.Monitor.Top;
+                y = bottom ? bar.Top - height - gap : bar.Bottom + gap;
+                if (bottom) work.Bottom = Math.Min(work.Bottom, bar.Top);
+                else work.Top = Math.Max(work.Top, bar.Bottom);
+            }
+            else
+            {
+                bool right = bar.Left > info.Monitor.Left;
+                x = right ? bar.Left - width - gap : bar.Right + gap;
+                y = point.Y - height / 2;
+                if (right) work.Right = Math.Min(work.Right, bar.Left);
+                else work.Left = Math.Max(work.Left, bar.Right);
+            }
+        }
+        x = Math.Max(work.Left + gap, Math.Min(x, work.Right - width - gap));
+        y = Math.Max(work.Top, Math.Min(y, work.Bottom - height));
         SetWindowPos(_hwnd, IntPtr.Zero, x, y, 0, 0, 0x0015);
         SetForegroundWindow(_hwnd); Activate();
         if (!SystemParameters.HighContrast && SystemParameters.MenuAnimation)
@@ -130,14 +151,46 @@ internal sealed class TrayMenuWindow : Window
     private void ApplyBackdrop()
     {
         if (_hwnd == IntPtr.Zero) return;
-        bool available = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621) && !SystemParameters.HighContrast;
-        int dark = _dark ? 1 : 0, rounded = 2, mica = available ? 2 : 1;
+        int dark = _dark ? 1 : 0, rounded = 2, noBackdrop = 1;
         DwmSetWindowAttribute(_hwnd, 20, ref dark, 4); DwmSetWindowAttribute(_hwnd, 33, ref rounded, 4);
-        int result = DwmSetWindowAttribute(_hwnd, 38, ref mica, 4);
+        DwmSetWindowAttribute(_hwnd, 38, ref noBackdrop, 4);
         var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-        if (available && result == 0 && DwmExtendFrameIntoClientArea(_hwnd, ref margins) == 0) Background = Brushes.Transparent;
-        else Background = SystemParameters.HighContrast ? SystemColors.WindowBrush : new SolidColorBrush(_dark ? Color.FromRgb(32, 32, 32) : Color.FromRgb(248, 248, 248));
+        bool acrylic = false;
+        if (!SystemParameters.HighContrast && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17134))
+        {
+            var policy = new AccentPolicy { State = 4, Flags = 2, Tint = _dark ? 0x99202020u : 0x99F3F3F3u };
+            IntPtr pointer = Marshal.AllocHGlobal(Marshal.SizeOf<AccentPolicy>());
+            try
+            {
+                Marshal.StructureToPtr(policy, pointer, false);
+                var data = new CompositionData { Attribute = 19, Data = pointer, Size = (nuint)Marshal.SizeOf<AccentPolicy>() };
+                acrylic = SetWindowCompositionAttribute(_hwnd, ref data) && DwmExtendFrameIntoClientArea(_hwnd, ref margins) == 0;
+            }
+            catch (EntryPointNotFoundException) { }
+            finally { Marshal.FreeHGlobal(pointer); }
+        }
+        if (acrylic) Background = Brushes.Transparent;
+        else Background = SystemParameters.HighContrast ? SystemColors.WindowBrush : new SolidColorBrush(_dark ? Color.FromRgb(32, 32, 32) : Color.FromRgb(243, 243, 243));
     }
+    private static Rect? TaskbarRect(Rect monitor)
+    {
+        bool Overlaps(Rect r) => r.Right > monitor.Left && r.Left < monitor.Right && r.Bottom > monitor.Top && r.Top < monitor.Bottom;
+        var primary = FindWindow("Shell_TrayWnd", null);
+        if (primary != IntPtr.Zero && GetWindowRect(primary, out var rect) && Overlaps(rect)) return rect;
+        IntPtr previous = IntPtr.Zero;
+        for (int i = 0; i < 16; i++)
+        {
+            previous = FindWindowEx(IntPtr.Zero, previous, "Shell_SecondaryTrayWnd", null);
+            if (previous == IntPtr.Zero) break;
+            if (GetWindowRect(previous, out rect) && Overlaps(rect)) return rect;
+        }
+        return null;
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct AccentPolicy { internal int State, Flags; internal uint Tint; internal int Animation; }
+    [StructLayout(LayoutKind.Sequential)] private struct CompositionData { internal int Attribute; internal IntPtr Data; internal nuint Size; }
+    [DllImport("user32.dll")] private static extern bool SetWindowCompositionAttribute(IntPtr hwnd, ref CompositionData data);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string? title);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string? title);
     [StructLayout(LayoutKind.Sequential)] private struct Point { internal int X, Y; }
     [StructLayout(LayoutKind.Sequential)] private struct Rect { internal int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct MonitorInfo { internal int Size; internal Rect Monitor, Work; internal uint Flags; }
