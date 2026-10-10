@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero.png" alt="TypeAllBack — Keep typing. Get your layout back. Пример: ghbdtn → привет." width="100%">
+  <img src="docs/hero.gif" alt="TypeAllBack — Keep typing. Get your layout back. Пример: ghbdtn → привет." width="100%">
 </p>
 
 <p align="center">
