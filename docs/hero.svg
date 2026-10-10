@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
+<svg xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
 <title>TypeAllBack — keyboard layout correction</title>
 <desc>Product illustration: typed ghbdtn with a caret and a nearby привет suggestion.</desc>
 <defs><linearGradient id="background" x2="0" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient><filter id="fieldShadow" x="-40%" y="-140%" width="180%" height="380%"><feDropShadow dx="0" dy="10" stdDeviation="36" flood-color="#000000" flood-opacity="0.38"/></filter></defs>
@@ -28,16 +28,15 @@
     <path d="M 178 176 H 108 C 55 176 55 110 108 110 H 140 M 116 86 L 140 110 L 116 134" stroke="url(#white)"/>
   </g>
 </svg>
-<g font-family="Segoe UI, Arial, sans-serif">
-<text x="220" y="196" fill="#F4F5F7" font-size="60" font-weight="600">TypeAllBack</text>
-<text x="96" y="290" fill="#BEC2CB" font-size="30">Keep typing. Get your layout back.</text>
-<text x="96" y="408" fill="#858D9B" font-size="22">Windows 10 / 11</text>
+
+<text font-family="Segoe UI, Arial, sans-serif" x="220" y="196" fill="#F4F5F7" font-size="60" font-weight="600">TypeAllBack</text>
+<text font-family="Segoe UI, Arial, sans-serif" x="96" y="290" fill="#BEC2CB" font-size="30">Keep typing. Get your layout back.</text>
+<text font-family="Segoe UI, Arial, sans-serif" x="96" y="408" fill="#858D9B" font-size="22">Windows 10 / 11</text>
 <circle cx="290" cy="400" r="3" fill="#626A77"/>
-<text x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
-<rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#474A52" filter="url(#fieldShadow)"/>
-<text x="900.53" y="275.73" fill="#F1F1F2" font-size="44.400000000000006">ghbdtn</text>
-<line x1="1038.67" y1="228.87" x2="1038.67" y2="288.07" stroke="#E3E5E9" stroke-width="2"/>
-<rect x="1051.00" y="216.53" width="172.67" height="83.87" rx="19.73" fill="#34363C" stroke="#64666C" stroke-width="1.2"/>
-<text x="1065.80" y="278.20" fill="#999A9E" font-size="44.400000000000006">привет</text>
-</g>
+<text font-family="Segoe UI, Arial, sans-serif" x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
+<rect id="input-field" inkscape:label="Фон поля ввода" x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#474A52" filter="url(#fieldShadow)"/>
+<text font-family="Segoe UI, Arial, sans-serif" id="input-text" inkscape:label="Текст до каретки" x="900.53" y="275.73" fill="#F1F1F2" font-size="44.400000000000006">ghbdtn</text>
+<line id="input-caret" inkscape:label="Каретка" x1="1038.67" y1="228.87" x2="1038.67" y2="288.07" stroke="#E3E5E9" stroke-width="2"/>
+<rect id="suggestion-frame" inkscape:label="Рамка подсказки" x="1051.00" y="216.53" width="172.67" height="83.87" rx="19.73" fill="#34363C" stroke="#64666C" stroke-width="1.2"/>
+<text font-family="Segoe UI, Arial, sans-serif" id="suggestion-text" inkscape:label="Текст подсказки" x="1065.80" y="278.20" fill="#999A9E" font-size="44.400000000000006">привет</text>
 </svg>
