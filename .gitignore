@@ -22,4 +22,4 @@ Thumbs.db
 
 # Release packages and installer intermediate files
 artifacts/
-Installer/GeneratedFiles.wxs
+src/Installer/GeneratedFiles.wxs

@@ -1,33 +1,33 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><PlatformTarget>x64</PlatformTarget></PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="../Models/en.json" LogicalName="LayoutPreview.Models.en.json" />
-    <EmbeddedResource Include="../Models/ru.json" LogicalName="LayoutPreview.Models.ru.json" />
-    <Compile Include="../KeyboardConversion.cs" Link="KeyboardConversion.cs" />
-    <Compile Include="../LanguagePlausibility.cs" Link="LanguagePlausibility.cs" />
-    <Compile Include="../InputSession.cs" Link="InputSession.cs" />
-    <Compile Include="../SessionDiagnostics.cs" Link="SessionDiagnostics.cs" />
-    <Compile Include="../IncrementalHistory.cs" Link="IncrementalHistory.cs" />
-    <Compile Include="../SessionInputLog.cs" Link="SessionInputLog.cs" />
-    <Compile Include="../SessionStartRules.cs" Link="SessionStartRules.cs" />
-    <Compile Include="../AcceptDiagnosticListener.cs" Link="AcceptDiagnosticListener.cs" />
-    <Compile Include="../AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
-    <Compile Include="../Native.cs" Link="Native.cs" />
-    <Compile Include="../KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
-    <Compile Include="../AutoEnter.cs" Link="AutoEnter.cs" />
-    <Compile Include="../PreviewMetrics.cs" Link="PreviewMetrics.cs" />
-    <Compile Include="../UiaRangeFont.cs" Link="UiaRangeFont.cs" />
-    <Compile Include="../PreviewFontResolver.cs" Link="PreviewFontResolver.cs" />
-    <Compile Include="../PreviewTheme.cs" Link="PreviewTheme.cs" />
-    <Compile Include="../NotepadEditor.cs" Link="NotepadEditor.cs" />
-    <Compile Include="../TextEditor.cs" Link="TextEditor.cs" />
-    <Compile Include="../UiaTextEditor.cs" Link="UiaTextEditor.cs" />
-    <Compile Include="../EditorPolling.cs" Link="EditorPolling.cs" />
-    <Compile Include="../EditorAvailability.cs" Link="EditorAvailability.cs" />
-    <Compile Include="../EditorContextDiagnostics.cs" Link="EditorContextDiagnostics.cs" />
-    <Compile Include="../PerformanceDiagnostics.cs" Link="PerformanceDiagnostics.cs" />
-    <Compile Include="../ShellSearchResolver.cs" Link="ShellSearchResolver.cs" />
-    <Compile Include="../TraySettings.cs" Link="TraySettings.cs" />
-    <Compile Include="../UpdateChecker.cs" Link="UpdateChecker.cs" />
+    <EmbeddedResource Include="../src/TypeAllBack/Models/en.json" LogicalName="LayoutPreview.Models.en.json" />
+    <EmbeddedResource Include="../src/TypeAllBack/Models/ru.json" LogicalName="LayoutPreview.Models.ru.json" />
+    <Compile Include="../src/TypeAllBack/KeyboardConversion.cs" Link="KeyboardConversion.cs" />
+    <Compile Include="../src/TypeAllBack/LanguagePlausibility.cs" Link="LanguagePlausibility.cs" />
+    <Compile Include="../src/TypeAllBack/InputSession.cs" Link="InputSession.cs" />
+    <Compile Include="../src/TypeAllBack/SessionDiagnostics.cs" Link="SessionDiagnostics.cs" />
+    <Compile Include="../src/TypeAllBack/IncrementalHistory.cs" Link="IncrementalHistory.cs" />
+    <Compile Include="../src/TypeAllBack/SessionInputLog.cs" Link="SessionInputLog.cs" />
+    <Compile Include="../src/TypeAllBack/SessionStartRules.cs" Link="SessionStartRules.cs" />
+    <Compile Include="../src/TypeAllBack/AcceptDiagnosticListener.cs" Link="AcceptDiagnosticListener.cs" />
+    <Compile Include="../src/TypeAllBack/AcceptedInputGuard.cs" Link="AcceptedInputGuard.cs" />
+    <Compile Include="../src/TypeAllBack/Native.cs" Link="Native.cs" />
+    <Compile Include="../src/TypeAllBack/KeyboardHookPump.cs" Link="KeyboardHookPump.cs" />
+    <Compile Include="../src/TypeAllBack/AutoEnter.cs" Link="AutoEnter.cs" />
+    <Compile Include="../src/TypeAllBack/PreviewMetrics.cs" Link="PreviewMetrics.cs" />
+    <Compile Include="../src/TypeAllBack/UiaRangeFont.cs" Link="UiaRangeFont.cs" />
+    <Compile Include="../src/TypeAllBack/PreviewFontResolver.cs" Link="PreviewFontResolver.cs" />
+    <Compile Include="../src/TypeAllBack/PreviewTheme.cs" Link="PreviewTheme.cs" />
+    <Compile Include="../src/TypeAllBack/NotepadEditor.cs" Link="NotepadEditor.cs" />
+    <Compile Include="../src/TypeAllBack/TextEditor.cs" Link="TextEditor.cs" />
+    <Compile Include="../src/TypeAllBack/UiaTextEditor.cs" Link="UiaTextEditor.cs" />
+    <Compile Include="../src/TypeAllBack/EditorPolling.cs" Link="EditorPolling.cs" />
+    <Compile Include="../src/TypeAllBack/EditorAvailability.cs" Link="EditorAvailability.cs" />
+    <Compile Include="../src/TypeAllBack/EditorContextDiagnostics.cs" Link="EditorContextDiagnostics.cs" />
+    <Compile Include="../src/TypeAllBack/PerformanceDiagnostics.cs" Link="PerformanceDiagnostics.cs" />
+    <Compile Include="../src/TypeAllBack/ShellSearchResolver.cs" Link="ShellSearchResolver.cs" />
+    <Compile Include="../src/TypeAllBack/TraySettings.cs" Link="TraySettings.cs" />
+    <Compile Include="../src/TypeAllBack/UpdateChecker.cs" Link="UpdateChecker.cs" />
   </ItemGroup>
 </Project>

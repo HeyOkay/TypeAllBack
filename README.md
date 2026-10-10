@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="https://github.com/HeyOkay/TypeAllBack/releases/latest"><strong>Скачать для Windows</strong></a>
-  · <a href="INSTALLING.md">Установка</a>
+  · <a href="docs/INSTALLING.md">Установка</a>
   · <a href="https://github.com/HeyOkay/TypeAllBack/issues">Сообщить о проблеме</a>
 </p>
 
@@ -41,7 +41,7 @@
 2. Установите приложение и запустите **TypeAllBack** из меню «Пуск».
 3. Наберите `ghbdtn` в поддерживаемом поле, дождитесь подсказки и нажмите **→**.
 
-Нужна Windows 10 или 11, x64. Установка выполняется для текущего пользователя; отдельно устанавливать .NET не требуется. Подробности — в [инструкции по установке](INSTALLING.md).
+Нужна Windows 10 или 11, x64. Установка выполняется для текущего пользователя; отдельно устанавливать .NET не требуется. Подробности — в [инструкции по установке](docs/INSTALLING.md).
 
 | Действие | Управление |
 | :--- | :--- |
@@ -72,17 +72,25 @@ TypeAllBack находится на стадии предварительных 
 Приложение написано на C# / WPF, .NET 10. Для сборки нужен .NET 10 SDK на Windows:
 
 ```powershell
-dotnet build .\LayoutPreviewPrototype.csproj -c Debug
+dotnet build .\src\TypeAllBack\LayoutPreviewPrototype.csproj -c Debug
 dotnet run --project .\Tests\LayoutPreview.Tests.csproj -c Debug
 ```
 
-Название основного файла проекта сохранено от прототипа LayoutPreview.
+Название основного файла проекта сохранено от прототипа LayoutPreview. Для открытия обоих проектов в IDE используйте `TypeAllBack.slnx`.
 
-- [Установка, обновления и сборка MSI](INSTALLING.md)
-- [Модели распознавания и источники данных](Models/README.md)
-- [Проверки поведения](TEST-CHECKLIST.md)
-- [Отчёт о производительности](PERFORMANCE-REPORT.md)
-- [История разработки и обратная связь](DEVELOPMENT-NOTES.md)
+| Папка | Содержимое |
+| :--- | :--- |
+| `src/TypeAllBack` | Приложение, иконки, звук и модели |
+| `src/Installer` | Установщик Windows |
+| `Tests` | Регрессионные проверки |
+| `Tools` | Сборка выпуска и подготовка моделей |
+| `docs` | Документация и материалы баннера |
+
+- [Установка, обновления и сборка MSI](docs/INSTALLING.md)
+- [Модели распознавания и источники данных](src/TypeAllBack/Models/README.md)
+- [Проверки поведения](docs/TEST-CHECKLIST.md)
+- [Отчёт о производительности](docs/PERFORMANCE-REPORT.md)
+- [История разработки и обратная связь](docs/DEVELOPMENT-NOTES.md)
 - [Редактируемый баннер в SVG](docs/hero.svg)
 - [Архив описания прототипа](docs/PROTOTYPE-HISTORY.md)
 
@@ -90,4 +98,4 @@ dotnet run --project .\Tests\LayoutPreview.Tests.csproj -c Debug
 
 Собственный код распространяется по [PolyForm Noncommercial 1.0.0](LICENSE). Коммерческое использование требует предварительного письменного разрешения правообладателя **HeyOkay**.
 
-Данные моделей имеют отдельную лицензию **CC BY-SA 4.0**. Условия и исключения описаны в [LICENSING.md](LICENSING.md) и [документации моделей](Models/README.md).
+Данные моделей имеют отдельную лицензию **CC BY-SA 4.0**. Условия и исключения описаны в [LICENSING.md](LICENSING.md) и [документации моделей](src/TypeAllBack/Models/README.md).

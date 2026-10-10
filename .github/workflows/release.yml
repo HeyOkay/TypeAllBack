@@ -20,7 +20,7 @@ jobs:
         run: |
           $version = $env:RELEASE_TAG.TrimStart('v')
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release tag' }
-          dotnet build LayoutPreviewPrototype.csproj -c Debug --nologo
+          dotnet build src/TypeAllBack/LayoutPreviewPrototype.csproj -c Debug --nologo
           if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
           dotnet run --project Tests/LayoutPreview.Tests.csproj -c Debug
           if ($LASTEXITCODE -ne 0) { throw 'Checks failed' }
@@ -33,5 +33,5 @@ jobs:
           $msi = "artifacts/installer-$version/TypeAllBack-$version-win-x64.msi"
           $hash = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText('SHA256.txt', "$hash  TypeAllBack-$version-win-x64.msi`n", [Text.UTF8Encoding]::new($false))
-          gh release create $env:RELEASE_TAG $msi SHA256.txt --verify-tag --title "TypeAllBack $version" --notes-file RELEASE-NOTES.md --latest
+          gh release create $env:RELEASE_TAG $msi SHA256.txt --verify-tag --title "TypeAllBack $version" --notes-file docs/RELEASE-NOTES.md --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }

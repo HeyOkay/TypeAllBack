@@ -28,7 +28,7 @@ for name,sentences in [('taiga',taiga),('mixed',taiga+gsd)]:
  model,encoded,info=train(sentences);models[name]=model;stats[name]=info
  out=root/name;out.mkdir(exist_ok=True);(out/'ru.json').write_bytes(encoded)
  print(name,info,flush=True)
-english=json.loads((repo/'Models/en.json').read_text(encoding='utf-8-sig'))
+english=json.loads((repo/'src/TypeAllBack/Models/en.json').read_text(encoding='utf-8-sig'))
 def score(text,m):
  ctx='^^';total=0;n=0;cnt=m['Counts'];con=m['Contexts'];alpha=m['Alphabet'];den=m['Total']+.5*len(alpha)
  for c in text.lower():

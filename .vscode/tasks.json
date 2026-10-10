@@ -5,7 +5,7 @@
       "label": "build",
       "command": "dotnet",
       "type": "process",
-      "args": ["build", "${workspaceFolder}/LayoutPreviewPrototype.csproj", "-c", "Debug"],
+      "args": ["build", "${workspaceFolder}/src/TypeAllBack/LayoutPreviewPrototype.csproj", "-c", "Debug"],
       "problemMatcher": "$msCompile",
       "group": { "kind": "build", "isDefault": true }
     }

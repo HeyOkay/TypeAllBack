@@ -12,7 +12,7 @@ if (Test-Path -LiteralPath $publishPath) {
   Remove-Item -LiteralPath $resolvedPublish -Recurse -Force
 }
 New-Item -ItemType Directory -Path $publishPath -Force | Out-Null
-dotnet publish (Join-Path $repoRoot 'LayoutPreviewPrototype.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false "-p:Version=$ProductVersion" "-p:AssemblyVersion=$ProductVersion.0" "-p:FileVersion=$ProductVersion.0" -o $publishPath
+dotnet publish (Join-Path $repoRoot 'src\TypeAllBack\LayoutPreviewPrototype.csproj') -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -p:DebugType=None -p:DebugSymbols=false "-p:Version=$ProductVersion" "-p:AssemblyVersion=$ProductVersion.0" "-p:FileVersion=$ProductVersion.0" -o $publishPath
 if ($LASTEXITCODE -ne 0) { throw 'Application publish failed' }
 # File IDs depend on relative paths, and remain stable across releases.
 $ns = 'http://wixtoolset.org/schemas/v4/wxs'
@@ -48,7 +48,7 @@ try {
   }
 } finally { $sha.Dispose() }
 $fragment.Add($group); $wix.Add($fragment); $doc.Add($wix)
-$doc.Save((Join-Path $repoRoot 'Installer\GeneratedFiles.wxs'))
-dotnet build (Join-Path $repoRoot 'Installer\TypeAllBack.Installer.wixproj') -c Release "-p:ProductVersion=$ProductVersion" "-p:PublishDir=$publishPath" "-p:OutputPath=$installerOutput\"
+$doc.Save((Join-Path $repoRoot 'src\Installer\GeneratedFiles.wxs'))
+dotnet build (Join-Path $repoRoot 'src\Installer\TypeAllBack.Installer.wixproj') -c Release "-p:ProductVersion=$ProductVersion" "-p:PublishDir=$publishPath" "-p:OutputPath=$installerOutput\"
 if ($LASTEXITCODE -ne 0) { throw 'MSI build failed' }
 Get-ChildItem -LiteralPath $installerOutput -Filter '*.msi' | Select-Object FullName,Length

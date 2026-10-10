@@ -6,7 +6,7 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/bin/Debug/net10.0-windows/TypeAllBack.exe",
+      "program": "${workspaceFolder}/src/TypeAllBack/bin/Debug/net10.0-windows/TypeAllBack.exe",
       "cwd": "${workspaceFolder}",
       "stopAtEntry": false,
       "console": "internalConsole"

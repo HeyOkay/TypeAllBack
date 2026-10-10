@@ -8,7 +8,7 @@
       <RegistrySearch Id="WindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
     </Property>
     <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 10240)" Message="Требуется 64-разрядная Windows 10 или новее." />
-    <Icon Id="AppIcon" SourceFile="..\Assets\TypeAllBack.ico" />
+    <Icon Id="AppIcon" SourceFile="..\TypeAllBack\Assets\TypeAllBack.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="both" />
     <Property Id="EXISTING_AUTOSTART">

@@ -1,5 +1,5 @@
 """Train pinned UD character models; no user examples or dev/test text are used.
-Usage: python Tools/train_language_models.py CORPUS_DIRECTORY Models --ru-corpus mixed
+Usage: python Tools/train_language_models.py CORPUS_DIRECTORY src/TypeAllBack/Models --ru-corpus mixed
 Russian choices: gsd (legacy), taiga, mixed. Taiga uses train parts a-e from r2.16.
 """
 import argparse, collections, hashlib, json, pathlib, re

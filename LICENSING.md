@@ -14,6 +14,6 @@
 
 ## Данные моделей и внешние материалы
 
-Статистические данные `Models/en.json` и `Models/ru.json` имеют отдельную лицензию **CC BY-SA 4.0**, уже указанную в [Models/README.md](Models/README.md) и [Models/LICENSE.txt](Models/LICENSE.txt). Их источники — UD English EWT, Russian GSD и Russian Taiga r2.16; авторство и ссылки сохранены там же. Ограничение PolyForm не заменяет эту лицензию данных.
+Статистические данные `src/TypeAllBack/Models/en.json` и `src/TypeAllBack/Models/ru.json` имеют отдельную лицензию **CC BY-SA 4.0**, уже указанную в [src/TypeAllBack/Models/README.md](src/TypeAllBack/Models/README.md) и [src/TypeAllBack/Models/LICENSE.txt](src/TypeAllBack/Models/LICENSE.txt). Их источники — UD English EWT, Russian GSD и Russian Taiga r2.16; авторство и ссылки сохранены там же. Ограничение PolyForm не заменяет эту лицензию данных.
 
 Внешние компоненты, инструменты сборки и .NET runtime сохраняют собственные лицензии. Лицензия TypeAllBack применяется только к оригинальным материалам, права на которые принадлежат его правообладателю; она не присваивает чужие права.

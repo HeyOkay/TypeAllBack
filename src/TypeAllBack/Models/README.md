@@ -37,7 +37,7 @@ https://raw.githubusercontent.com/UniversalDependencies/UD_Russian-GSD/r2.16/ru_
 Download the five `ru_taiga-ud-train-a.conllu` through `-e.conllu` files from
 https://github.com/UniversalDependencies/UD_Russian-Taiga/tree/r2.16 into the same directory.
 
-Run `python Tools/train_language_models.py CORPUS_DIRECTORY Models --ru-corpus mixed`.
+Run `python Tools/train_language_models.py CORPUS_DIRECTORY src/TypeAllBack/Models --ru-corpus mixed`.
 Use `--ru-corpus gsd` to reproduce the legacy Russian model, or `taiga` for comparison.
 `training.json` records hashes, sentence counts, character counts and output hashes.
 Only `# text = ` records from the train files are used. Lowercase letter runs in the
