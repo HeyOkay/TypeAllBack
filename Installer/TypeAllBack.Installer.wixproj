@@ -1,0 +1,10 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputName>TypeAllBack-$(ProductVersion)-win-x64</OutputName>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <!-- ICE91 warns about per-user directories in a possible per-machine install.
+         This package has fixed perUser scope and never supports ALLUSERS. -->
+    <SuppressIces>ICE91</SuppressIces>
+    <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishDir)</DefineConstants>
+  </PropertyGroup>
+</Project>

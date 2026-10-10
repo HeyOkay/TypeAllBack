@@ -1,0 +1,47 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="TypeAllBack" Manufacturer="TypeAllBack" Version="$(var.ProductVersion)"
+           UpgradeCode="B43F914B-3100-4C9B-A9A1-BD9F5E8BD4CA" Scope="perUser" Language="1049" Codepage="1251">
+    <SummaryInformation Description="TypeAllBack — предварительная версия" />
+    <MajorUpgrade DowngradeErrorMessage="Уже установлена более новая версия TypeAllBack." Schedule="afterInstallInitialize" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Property Id="WINDOWS_BUILD">
+      <RegistrySearch Id="WindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" />
+    </Property>
+    <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 10240)" Message="Требуется 64-разрядная Windows 10 или новее." />
+    <Icon Id="AppIcon" SourceFile="..\Assets\TypeAllBack.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="both" />
+    <Property Id="EXISTING_AUTOSTART">
+      <RegistrySearch Id="PreviousStartup" Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="TypeAllBack" Type="raw" />
+    </Property>
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="PerUserPrograms" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="TypeAllBack" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenu" Name="TypeAllBack">
+        <Component Id="MenuShortcut" Guid="58AA7085-73A4-4B09-80B1-47C06BFB082A">
+          <Shortcut Id="MainShortcut" Name="TypeAllBack" Target="[INSTALLFOLDER]TypeAllBack.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon" />
+          <RemoveFolder Id="RemoveAppMenu" On="uninstall" />
+          <RemoveFolder Id="RemoveEmptyPrograms" Directory="PerUserPrograms" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\TypeAllBack\Installer" Name="Shortcut" Value="1" Type="integer" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="KeepAutostart" Guid="591DD0AB-9EED-448C-B59A-EDC8789E179C" Condition="EXISTING_AUTOSTART">
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="TypeAllBack" Value="&quot;[INSTALLFOLDER]TypeAllBack.exe&quot;" Type="string" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <CustomAction Id="CleanupAutostart" FileRef="MainExecutable" ExeCommand="--uninstall-cleanup" Execute="deferred" Impersonate="yes" Return="check" />
+    <InstallExecuteSequence>
+      <Custom Action="CleanupAutostart" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+    <Feature Id="Main" Title="TypeAllBack" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentRef Id="MenuShortcut" />
+      <ComponentRef Id="KeepAutostart" />
+    </Feature>
+  </Package>
+</Wix>

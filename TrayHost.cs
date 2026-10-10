@@ -17,6 +17,7 @@ internal sealed class TrayHost : IDisposable
     internal TrayHost(TraySettings settings, Action<bool> enabled, Action debug, CorrectionSound sound)
     {
         _settings = settings;
+        MigrateStartupExecutable();
         _menu.AddToggle("Утилита включена", () => settings.Enabled, value => { enabled(value); settings.Enabled = value; settings.Save(); });
         _menu.AddToggle("Исправлять перед Enter", () => AutoEnterOptions.Enabled, AutoEnterOptions.SetEnabled);
         _menu.AddToggle("Звук исправления", () => sound.Enabled, value => { sound.SetEnabled(value); settings.Sound = value; settings.Save(); });
@@ -47,6 +48,18 @@ internal sealed class TrayHost : IDisposable
         else MessageBox.Show(result.Message, "TypeAllBack", MessageBoxButton.OK, MessageBoxImage.Information);
     }
     private static string StartupCommand => "\"" + Environment.ProcessPath + "\"";
+    internal static void CleanupStartup() => SetAutoStart(false);
+    private static void MigrateStartupExecutable()
+    {
+        try
+        {
+            using var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+            string? old = run?.GetValue("TypeAllBack") as string;
+            string legacy = "\"" + System.IO.Path.Combine(AppContext.BaseDirectory, "LayoutPreviewPrototype.exe") + "\"";
+            if (string.Equals(old, legacy, StringComparison.OrdinalIgnoreCase)) run!.SetValue("TypeAllBack", StartupCommand);
+        }
+        catch (Exception e) when (e is SecurityException or UnauthorizedAccessException or System.IO.IOException) { }
+    }
     private static bool AutoStartEnabled()
     {
         try { using var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"); return run?.GetValue("TypeAllBack") as string == StartupCommand; }

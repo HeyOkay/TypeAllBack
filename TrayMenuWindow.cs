@@ -48,7 +48,7 @@ internal sealed class TrayMenuWindow : Window
           """);
         var heading = new StackPanel { Margin = new Thickness(32, 8, 10, 8) };
         var title = new TextBlock { Text = "TypeAllBack", FontWeight = FontWeights.Normal, FontSize = 13 };
-        var detail = new TextBlock { Text = "Исправление раскладки", FontSize = 13, Margin = new Thickness(0, 2, 0, 0), Opacity = .6 };
+        var detail = new TextBlock { Text = "Исправление раскладки · " + UpdateChecker.Current.ToString(3), FontSize = 13, Margin = new Thickness(0, 2, 0, 0), Opacity = .6 };
         _labels.Add(title); _labels.Add(detail);
         heading.Children.Add(title); heading.Children.Add(detail); _items.Children.Add(heading);
         Separator();

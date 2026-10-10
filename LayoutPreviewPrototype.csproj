@@ -1,6 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <AssemblyName>TypeAllBack</AssemblyName>
+    <Product>TypeAllBack</Product>
+    <Title>TypeAllBack</Title>
+    <Description>Keyboard layout preview and correction</Description>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
@@ -13,6 +20,7 @@
   <Resource Include="Assets\TypeAllBack.ico" />
   <EmbeddedResource Include="Assets\Correction.wav" LogicalName="TypeAllBack.Correction.wav" />
   <Compile Remove="Tests\**\*.cs" />
+  <Compile Remove="Installer\**\*.cs" />
   <EmbeddedResource Include="Models\en.json" LogicalName="LayoutPreview.Models.en.json" />
   <EmbeddedResource Include="Models\ru.json" LogicalName="LayoutPreview.Models.ru.json" />
 </ItemGroup></Project>

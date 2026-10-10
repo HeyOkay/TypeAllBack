@@ -19,3 +19,7 @@ packages/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Release packages and installer intermediate files
+artifacts/
+Installer/GeneratedFiles.wxs

@@ -13,6 +13,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains("--uninstall-cleanup"))
+        {
+            TrayHost.CleanupStartup();
+            Shutdown();
+            return;
+        }
         // Keep the named object alive for the whole application lifetime.
         // No mutex ownership/wait is needed: only its atomic creation reserves
         // the slot. A second process exits before installing a keyboard hook.
