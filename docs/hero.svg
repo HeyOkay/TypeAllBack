@@ -35,9 +35,9 @@
 <circle cx="290" cy="400" r="3" fill="#626A77"/>
 <text x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
 <rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#3D4048"/>
-<text x="908" y="270" fill="#F1F1F2" font-size="46">ghbdtn</text>
-<line x1="1060.50" y1="225" x2="1060.50" y2="283" stroke="#E3E5E9" stroke-width="2"/>
-<rect x="1072.50" y="219" width="192" height="66" rx="12" fill="#34363C" stroke="#64666C" stroke-width="1.5"/>
-<text x="1090.50" y="267" fill="#A8A9AD" font-size="42">привет</text>
+<text x="908" y="267.50" fill="#F1F1F2" font-size="46">ghbdtn</text>
+<line x1="1060.50" y1="232.00" x2="1060.50" y2="290.00" stroke="#E3E5E9" stroke-width="2"/>
+<rect x="1072.50" y="232.00" width="183.50" height="58.00" rx="12" fill="#34363C" stroke="#64666C" stroke-width="2"/>
+<text x="1090.50" y="267.50" fill="#A8A9AD" font-size="46">привет</text>
 </g>
 </svg>
