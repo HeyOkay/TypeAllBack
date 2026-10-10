@@ -23,3 +23,6 @@ Thumbs.db
 # Release packages and installer intermediate files
 artifacts/
 src/Installer/GeneratedFiles.wxs
+
+# Local agent instructions
+/AGENTS.md
