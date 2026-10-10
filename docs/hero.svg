@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
+<title>TypeAllBack — keyboard layout correction</title>
+<desc>Product illustration: typed ghbdtn with a caret and a nearby привет suggestion.</desc>
+<defs><linearGradient id="background" x2="1" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient></defs>
+<rect width="1600" height="520" rx="32" fill="url(#background)"/>
+<svg x="80" y="116" width="120" height="120" viewBox="0 0 256 256">
+  <title>TypeAllBack — circular return icon</title>
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#78DFFF"/><stop offset=".42" stop-color="#1677FF"/><stop offset="1" stop-color="#062CB8"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2=".75" y2="1">
+      <stop stop-color="#389AFF"/><stop offset=".4" stop-color="#0957F5"/><stop offset="1" stop-color="#0732D4"/>
+    </linearGradient>
+    <radialGradient id="light" cx=".24" cy=".15" r=".68">
+      <stop stop-color="#B4F0FF" stop-opacity=".45"/><stop offset="1" stop-color="#B4F0FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9EFFA"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="112" fill="url(#rim)"/>
+  <circle cx="128" cy="128" r="107" fill="url(#face)"/>
+  <circle cx="128" cy="128" r="107" fill="url(#light)"/>
+  <circle cx="128" cy="128" r="107" fill="none" stroke="#87DCFF" stroke-opacity=".6" stroke-width=".65"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="12">
+    <path d="M 178 176 H 108 C 55 176 55 110 108 110 H 140 M 116 86 L 140 110 L 116 134" stroke="#05259A" opacity=".2" transform="translate(0 2)"/>
+    <path d="M 178 176 H 108 C 55 176 55 110 108 110 H 140 M 116 86 L 140 110 L 116 134" stroke="url(#white)"/>
+  </g>
+</svg>
+<g font-family="Segoe UI, Arial, sans-serif">
+<text x="220" y="196" fill="#F4F5F7" font-size="60" font-weight="600">TypeAllBack</text>
+<text x="96" y="290" fill="#BEC2CB" font-size="30">Keep typing. Get your layout back.</text>
+<text x="96" y="408" fill="#858D9B" font-size="22">Windows 10 / 11</text>
+<circle cx="290" cy="400" r="3" fill="#626A77"/>
+<text x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
+<rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#3D4048"/>
+<text x="908" y="270" fill="#F1F1F2" font-size="46">ghbdtn</text>
+<line x1="1060.50" y1="225" x2="1060.50" y2="283" stroke="#E3E5E9" stroke-width="2"/>
+<rect x="1072.50" y="219" width="192" height="66" rx="12" fill="#34363C" stroke="#64666C" stroke-width="1.5"/>
+<text x="1090.50" y="267" fill="#A8A9AD" font-size="42">привет</text>
+</g>
+</svg>

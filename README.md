@@ -83,6 +83,7 @@ dotnet run --project .\Tests\LayoutPreview.Tests.csproj -c Debug
 - [Проверки поведения](TEST-CHECKLIST.md)
 - [Отчёт о производительности](PERFORMANCE-REPORT.md)
 - [История разработки и обратная связь](DEVELOPMENT-NOTES.md)
+- [Редактируемый баннер в SVG](docs/hero.svg)
 - [Архив описания прототипа](docs/PROTOTYPE-HISTORY.md)
 
 ## Лицензия
