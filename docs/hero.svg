@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520">
 <title>TypeAllBack — keyboard layout correction</title>
 <desc>Product illustration: typed ghbdtn with a caret and a nearby привет suggestion.</desc>
-<defs><linearGradient id="background" x2="1" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient></defs>
+<defs><linearGradient id="background" x2="0" y2="1"><stop stop-color="#181A20"/><stop offset="1" stop-color="#222631"/></linearGradient><filter id="fieldShadow" x="-25%" y="-80%" width="150%" height="280%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.55"/></filter></defs>
 <rect width="1600" height="520" rx="32" fill="url(#background)"/>
 <svg x="80" y="116" width="120" height="120" viewBox="0 0 256 256">
   <title>TypeAllBack — circular return icon</title>
@@ -34,10 +34,10 @@
 <text x="96" y="408" fill="#858D9B" font-size="22">Windows 10 / 11</text>
 <circle cx="290" cy="400" r="3" fill="#626A77"/>
 <text x="310" y="408" fill="#858D9B" font-size="22">EN ↔ RU</text>
-<rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#3D4048"/>
-<text x="908" y="267.50" fill="#F1F1F2" font-size="46">ghbdtn</text>
-<line x1="1060.50" y1="232.00" x2="1060.50" y2="290.00" stroke="#E3E5E9" stroke-width="2"/>
-<rect x="1072.50" y="232.00" width="183.50" height="58.00" rx="12" fill="#34363C" stroke="#64666C" stroke-width="2"/>
-<text x="1090.50" y="267.50" fill="#A8A9AD" font-size="46">привет</text>
+<rect x="866" y="182" width="638" height="148" rx="28" fill="#303238" stroke="#474A52" filter="url(#fieldShadow)"/>
+<text x="1011.00" y="267.50" fill="#F1F1F2" font-size="46">ghbdtn</text>
+<line x1="1163.50" y1="225.00" x2="1163.50" y2="287.00" stroke="#E3E5E9" stroke-width="2"/>
+<rect x="1175.50" y="225.00" width="183.50" height="62.00" rx="12" fill="#34363C" stroke="#64666C" stroke-width="2"/>
+<text x="1193.50" y="262.50" fill="#BEC0C5" font-size="46">привет</text>
 </g>
 </svg>
