@@ -312,6 +312,17 @@ foreach (string unsupportedClass in new[] { "Button", "MyEditCanvas", "Chrome_Re
     Eq(NotepadEditor.IsSupportedClass(unsupportedClass), false, "unknown native class is not treated as Edit " + unsupportedClass);
 Eq(NotepadEditor.NormalizeText("a\r\nb", "WindowsForms10.EDIT.app.0.test"), "a\r\nb", "WinForms Edit uses CRLF character offsets");
 Eq(NotepadEditor.NormalizeText("a\r\nb", "RichEdit20W"), "a\rb", "legacy RichEdit uses paragraph offsets");
+Eq(UiaTextEditor.BrowserProbeAllowed("Chrome_RenderWidgetHostHWND", 1000, 0, true, false), false, "idle Chrome page must not activate UIA");
+Eq(UiaTextEditor.BrowserProbeAllowed("Chrome_WidgetWin_1", 1000, 999, false, false), false, "typing in another foreground must not probe Chrome");
+Eq(UiaTextEditor.BrowserProbeAllowed("Chrome_WidgetWin_1", 1000, 999, true, false), true, "first physical input permits field discovery");
+Eq(UiaTextEditor.BrowserProbeAllowed("Chrome_WidgetWin_1", 1000, 0, true, true), true, "confirmed composer remains refreshable while idle");
+Eq(UiaTextEditor.BrowserProbeAllowed("Chrome_WidgetWin_1", 800, 0, true, false), false, "unsupported browser context stops probing after startup budget");
+Eq(UiaTextEditor.BrowserProbeAllowed("Edit", 1000, 0, false, false), true, "native editors retain immediate snapshots");
+Eq(UiaTextEditor.MayInspectDocument(System.Windows.Automation.ControlType.Document, "Chrome_WidgetWin_1", null), false, "browser page must be rejected before whole-document attributes");
+Eq(UiaTextEditor.MayInspectDocument(System.Windows.Automation.ControlType.Document, "Chrome_WidgetWin_1", true), false, "readonly browser document stays excluded");
+Eq(UiaTextEditor.MayInspectDocument(System.Windows.Automation.ControlType.Edit, "Chrome_WidgetWin_1", null), true, "contenteditable Edit without ValuePattern remains supported");
+Eq(UiaTextEditor.MayInspectDocument(System.Windows.Automation.ControlType.Document, "Chrome_WidgetWin_1", false), true, "explicitly writable composite browser document remains supported");
+Eq(UiaTextEditor.MayInspectDocument(System.Windows.Automation.ControlType.Document, "OpusApp", null), true, "nonbrowser document editors retain text writability checks");
 Eq(UiaTextEditor.IsWritableText(false, null), true, "writable TextPattern does not require ValuePattern or Edit role");
 Eq(UiaTextEditor.IsWritableText(null, false), true, "ValuePattern can establish writability when text attribute is unsupported");
 Eq(UiaTextEditor.IsWritableText(null, null), false, "unknown writability is rejected");

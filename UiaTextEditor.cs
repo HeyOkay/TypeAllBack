@@ -29,7 +29,7 @@ internal sealed class UiaTextEditor : IDisposable
         _wake.Set();
     }
     private Thread? _worker;
-    private AutomationFocusChangedEventHandler? _focusChanged;
+
     private static string _lastRejectedContext = "";
     private static long _lastRejectionAt;
     private EditorSnapshot? _formattingSnapshot;
@@ -47,7 +47,20 @@ internal sealed class UiaTextEditor : IDisposable
     private AutomationElement? _nativeElement;
     private IntPtr _nativeElementHandle;
     private int _nativeElementGeneration = -1;
-    public void NotifyInput() { Interlocked.Exchange(ref _lastInputAt, Environment.TickCount64); _wake.Set(); }
+    private IntPtr _inputForeground;
+    public void NotifyInput()
+    {
+        Interlocked.Exchange(ref _inputForeground, Native.GetForegroundWindow());
+        Interlocked.Exchange(ref _lastInputAt, Environment.TickCount64);
+        _wake.Set();
+    }
+    internal void NotifyFocusChanged()
+    {
+        Interlocked.Increment(ref _focusGeneration);
+        Volatile.Write(ref _snapshot, null);
+        _wake.Set();
+        SnapshotChanged?.Invoke();
+    }
 
     private void Publish(EditorSnapshot? snapshot)
     {
@@ -69,9 +82,6 @@ internal sealed class UiaTextEditor : IDisposable
 
     private void Run()
     {
-        _focusChanged = (_, _) => { Interlocked.Increment(ref _focusGeneration); Volatile.Write(ref _snapshot, null); _wake.Set(); SnapshotChanged?.Invoke(); };
-        try { Automation.AddAutomationFocusChangedEventHandler(_focusChanged); }
-        catch (COMException) { /* Polling remains available if focus events are unavailable. */ }
         long nextCaptureAt = 0;
         int lastCaptureGeneration = -1;
         while (!_stopping)
@@ -102,8 +112,6 @@ internal sealed class UiaTextEditor : IDisposable
         }
         Volatile.Write(ref _snapshot, null);
         SetTextEvents(null);
-        try { Automation.RemoveAutomationFocusChangedEventHandler(_focusChanged); }
-        catch (COMException) { }
     }
 
     public bool TryReadCached(out EditorSnapshot snapshot)
@@ -393,6 +401,13 @@ internal sealed class UiaTextEditor : IDisposable
                 stage = _nativeCaptureFailure;
                 return captured;
             }
+            if (presentation && !BrowserProbeAllowed(nativeClass, Environment.TickCount64,
+                Interlocked.Read(ref _lastInputAt), foreground == Interlocked.CompareExchange(ref _inputForeground, IntPtr.Zero, IntPtr.Zero),
+                Volatile.Read(ref _snapshot) is { } cached && cached.Foreground == foreground && cached.Editor == focusHandle))
+            {
+                stage = "Chromium: ожидание клавиатурного ввода; веб-страница не опрашивается";
+                return false;
+            }
             using var captureMeasurement = PerformanceDiagnostics.Measure("uia-capture");
             var focused = AutomationElement.FocusedElement;
             stage = "UIA focused element";
@@ -553,7 +568,7 @@ internal sealed class UiaTextEditor : IDisposable
         if (context == _boundContext && Environment.TickCount64 - _bindingRejectedAt < 300) return false;
         if (context != _boundContext) SetTextEvents(null);
         _boundContext = context;
-        bool resolved = TryResolveEditableAncestors(focused, out element, out pattern);
+        bool resolved = TryResolveEditableAncestors(focused, nativeClass, out element, out pattern);
         if (!resolved && nativeClass.Contains("InputSite", StringComparison.Ordinal) &&
             _shellDiscovery.TryBegin(context, Environment.TickCount64))
         {
@@ -591,7 +606,7 @@ internal sealed class UiaTextEditor : IDisposable
         catch (Exception e) when (e is InvalidOperationException or COMException or ElementNotAvailableException) { }
     }
 
-    private static bool TryResolveEditableAncestors(AutomationElement focused, out AutomationElement element, out TextPattern pattern)
+    private static bool TryResolveEditableAncestors(AutomationElement focused, string nativeClass, out AutomationElement element, out TextPattern pattern)
     {
         element = focused; pattern = null!;
         int processId = focused.Current.ProcessId;
@@ -603,9 +618,12 @@ internal sealed class UiaTextEditor : IDisposable
             if (candidate.TryGetCurrentPattern(TextPattern.Pattern, out var raw))
             {
                 var candidatePattern = (TextPattern)raw;
-                var attribute = candidatePattern.DocumentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
                 bool? valueReadOnly = candidate.TryGetCurrentPattern(ValuePattern.Pattern, out var rawValue)
                     ? ((ValuePattern)rawValue).Current.IsReadOnly : null;
+                // Do not ask DocumentRange for whole-page attributes. Chromium
+                // flattens rich pages for TextPattern; that work can stall Chrome.
+                if (!MayInspectDocument(properties.ControlType, nativeClass, valueReadOnly)) return false;
+                var attribute = candidatePattern.DocumentRange.GetAttributeValue(TextPattern.IsReadOnlyAttribute);
                 if (IsWritableText(attribute is bool readOnly ? readOnly : null, valueReadOnly))
                 {
                     element = candidate; pattern = candidatePattern;
@@ -629,6 +647,17 @@ internal sealed class UiaTextEditor : IDisposable
         _lastTextValueDifferenceAt = now;
         Trace.WriteLine($"UIA stable TextPattern fallback textLength={textLength} valueLength={valueLength} selection={start},{end}");
     }
+
+    internal static bool IsChromiumWindow(string nativeClass) =>
+        nativeClass.StartsWith("Chrome_", StringComparison.Ordinal);
+
+    internal static bool BrowserProbeAllowed(string nativeClass, long now, long lastInput,
+        bool inputInForeground, bool confirmedField) =>
+        !IsChromiumWindow(nativeClass) || confirmedField ||
+        (inputInForeground && now - lastInput is >= 0 and < 800);
+
+    internal static bool MayInspectDocument(ControlType controlType, string nativeClass, bool? valueReadOnly) =>
+        !IsChromiumWindow(nativeClass) || controlType != ControlType.Document || valueReadOnly == false;
 
     internal static bool IsWritableText(bool? textReadOnly, bool? valueReadOnly) =>
         textReadOnly != true && valueReadOnly != true && (textReadOnly == false || valueReadOnly == false);

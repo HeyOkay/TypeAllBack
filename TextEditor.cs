@@ -10,6 +10,7 @@ internal static class TextEditor
     public static void Stop() => Automation.Dispose();
     public static event Action? SnapshotChanged { add => Automation.SnapshotChanged += value; remove => Automation.SnapshotChanged -= value; }
     public static void NotifyInput() => Automation.NotifyInput();
+    internal static void NotifyFocusChanged() => Automation.NotifyFocusChanged();
     // Only cached snapshots and cheap focus checks; no native text reads or COM.
     public static bool TryReadForHook(out EditorSnapshot snapshot) => Automation.TryReadCached(out snapshot);
 

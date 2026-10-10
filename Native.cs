@@ -6,6 +6,13 @@ namespace LayoutPreviewPrototype;
 internal static class Native
 {
     public const int WH_KEYBOARD_LL = 13;
+    internal const uint EVENT_SYSTEM_FOREGROUND = 0x0003, EVENT_OBJECT_FOCUS = 0x8005;
+    internal delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int objectId, int childId, uint threadId, uint time);
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc callback, uint processId, uint threadId, uint flags);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnhookWinEvent(IntPtr hook);
     public const uint GUI_INMOVESIZE = 0x0002;
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct LOGFONT

@@ -16,6 +16,8 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
     private Native.LowLevelKeyboardProc? _proc;
     private uint _threadId;
     private IntPtr _hook;
+    private IntPtr _focusHook, _foregroundHook;
+    private Native.WinEventProc? _focusProc;
     private Exception? _error;
     private long _sequence, _inputEpoch;
     public long LastInputEpoch => Interlocked.Read(ref _inputEpoch);
@@ -44,11 +46,29 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
             using var process = Process.GetCurrentProcess(); using var module = process.MainModule!;
             _hook = Native.SetWindowsHookEx(Native.WH_KEYBOARD_LL, _proc, Native.GetModuleHandle(module.ModuleName), 0);
             if (_hook == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            // Native out-of-context events invalidate cached fields without
+            // registering a desktop-wide UIA listener (which activates browser AX).
+            _focusProc = (_, _, _, _, _, _, _) =>
+            {
+                AcceptContext = null;
+                TextEditor.NotifyFocusChanged();
+            };
+            _focusHook = Native.SetWinEventHook(Native.EVENT_OBJECT_FOCUS, Native.EVENT_OBJECT_FOCUS,
+                IntPtr.Zero, _focusProc, 0, 0, 0x0002); // OUTOFCONTEXT | SKIPOWNPROCESS
+            _foregroundHook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND,
+                IntPtr.Zero, _focusProc, 0, 0, 0x0002);
+            if (_focusHook == IntPtr.Zero || _foregroundHook == IntPtr.Zero)
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
             _ready.Set();
             while (Native.GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
         }
         catch (Exception error) { _error = error; _ready.Set(); }
-        finally { if (_hook != IntPtr.Zero) Native.UnhookWindowsHookEx(_hook); }
+        finally
+        {
+            if (_focusHook != IntPtr.Zero) Native.UnhookWinEvent(_focusHook);
+            if (_foregroundHook != IntPtr.Zero) Native.UnhookWinEvent(_foregroundHook);
+            if (_hook != IntPtr.Zero) Native.UnhookWindowsHookEx(_hook);
+        }
     }
     private IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
     {
@@ -65,7 +85,8 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
         // Native deletion must not depend on cross-process GUI focus checks.
         // The controller tracks Backspace against its own confirmed session.
         var snapshot = SnapshotForKey(data.vkCode, ReadSnapshot);
-        if (relevantDown) TextEditor.NotifyInput();
+        if (relevantDown && (!control && !alt && !win || snapshot != null))
+            TextEditor.NotifyInput();
         long beforeSequence = LastSequence;
         bool accepted = relevantDown && data.vkCode == Native.VK_RIGHT && !shift && !control && !alt && !win &&
             ((data.flags & Native.LLKHF_INJECTED) == 0 || testInput) && CanAccept(AcceptContext, snapshot, beforeSequence);
