@@ -8,7 +8,7 @@ namespace LayoutPreviewPrototype;
 internal sealed class UpdateWindow : Window
 {
     private readonly CancellationTokenSource _cancel = new();
-    private bool _finished;
+    private bool _finished, _installing;
     internal UpdateWindow(UpdateChecker checker, UpdatePackage package)
     {
         Title = "Обновление TypeAllBack"; Width = 390; Height = 190; ResizeMode = ResizeMode.NoResize;
@@ -20,7 +20,7 @@ internal sealed class UpdateWindow : Window
         panel.Children.Add(text); panel.Children.Add(bar); panel.Children.Add(cancel); Content = panel;
         Closed += (_, _) => _cancel.Dispose();
         cancel.Click += (_, _) => _cancel.Cancel();
-        Closing += (_, e) => { if (!_finished) { _cancel.Cancel(); e.Cancel = true; } };
+        Closing += (_, e) => { if (!_finished) { if (!_installing) _cancel.Cancel(); e.Cancel = true; } };
         Loaded += async (_, _) =>
         {
             try
@@ -28,8 +28,8 @@ internal sealed class UpdateWindow : Window
                 var progress = new Progress<DownloadProgress>(p => { bar.Value = 100.0 * p.Bytes / p.Total; text.Text = $"Загрузка: {p.Bytes / 1048576.0:F1} из {p.Total / 1048576.0:F1} МБ"; });
                 string file = await checker.DownloadAsync(package, progress, _cancel.Token);
                 _cancel.Token.ThrowIfCancellationRequested();
-                text.Text = "Пакет проверен. Установка и перезапуск…"; cancel.IsEnabled = false;
-                StartInstaller(file, package.Sha256);
+                text.Text = "Пакет проверен. Установка и перезапуск…"; cancel.IsEnabled = false; _installing = true;
+                await StartInstaller(file, package.Sha256);
                 _finished = true; Application.Current.Shutdown();
             }
             catch (OperationCanceledException) { _finished = true; Close(); }
@@ -37,15 +37,25 @@ internal sealed class UpdateWindow : Window
             { _finished = true; MessageBox.Show("Не удалось загрузить или установить обновление. Текущая версия продолжает работать.", "TypeAllBack", MessageBoxButton.OK, MessageBoxImage.Warning); Close(); }
         };
     }
-    internal static void StartInstaller(string file, string checksum)
+    internal static async Task StartInstaller(string file, string checksum)
     {
         string directory = Path.GetDirectoryName(file)!;
         string script = Path.Combine(directory, "InstallUpdate.ps1");
         using (var source = typeof(UpdateWindow).Assembly.GetManifestResourceStream("TypeAllBack.InstallUpdate.ps1")!)
-        using (var target = File.Create(script)) source.CopyTo(target);
+        using (var reader = new StreamReader(source, System.Text.Encoding.UTF8))
+            File.WriteAllText(script, reader.ReadToEnd(), new System.Text.UTF8Encoding(true));
+        string ready = Path.Combine(directory, "helper.ready");
         string executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "TypeAllBack", "TypeAllBack.exe");
         var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe")) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
-        foreach (string argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-InstallerPath", file, "-TargetExecutable", executable, "-ParentProcessId", Environment.ProcessId.ToString(), "-LogPath", Path.Combine(directory, "install.log"), "-ExpectedSha256", checksum }) start.ArgumentList.Add(argument);
+        foreach (string argument in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-InstallerPath", file, "-TargetExecutable", executable, "-ParentProcessId", Environment.ProcessId.ToString(), "-LogPath", Path.Combine(directory, "install.log"), "-ExpectedSha256", checksum, "-ReadyFile", ready }) start.ArgumentList.Add(argument);
         using var helper = Process.Start(start) ?? throw new IOException("Update helper could not start");
+        for (int attempt = 0; attempt < 100; attempt++)
+        {
+            if (File.Exists(ready)) return;
+            if (helper.HasExited) throw new IOException("Update helper exited before handoff");
+            await Task.Delay(50);
+        }
+        if (!helper.HasExited) helper.Kill();
+        throw new IOException("Update helper did not acknowledge startup");
     }
 }

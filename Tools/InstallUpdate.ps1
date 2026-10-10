@@ -1,8 +1,12 @@
 param([Parameter(Mandatory=$true)][string]$InstallerPath, [Parameter(Mandatory=$true)][string]$TargetExecutable,
       [Parameter(Mandatory=$true)][int]$ParentProcessId, [Parameter(Mandatory=$true)][string]$LogPath,
-      [Parameter(Mandatory=$true)][string]$ExpectedSha256)
+      [Parameter(Mandatory=$true)][string]$ExpectedSha256, [Parameter(Mandatory=$true)][string]$ReadyFile)
 $ErrorActionPreference = 'Stop'
+$readyWritten = $false
 try {
+    if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Installer checksum changed' }
+    [IO.File]::WriteAllText($ReadyFile, 'ready')
+    $readyWritten = $true
     Wait-Process -Id $ParentProcessId -Timeout 30 -ErrorAction SilentlyContinue
     if (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue) { throw 'Application did not close' }
     if ((Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash -ne $ExpectedSha256) { throw 'Installer checksum changed' }
@@ -13,6 +17,7 @@ try {
     Start-Process -FilePath $TargetExecutable -WindowStyle Hidden
 } catch {
     $_.Exception.Message | Out-File -LiteralPath ($LogPath + '.failure.txt') -Encoding utf8
+    if (-not $readyWritten) { exit 1 }
     if (Test-Path -LiteralPath $TargetExecutable) { Start-Process -FilePath $TargetExecutable -WindowStyle Hidden }
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show('Обновление не установлено. Если прежняя версия доступна, она запущена снова. Журнал: ' + $LogPath, 'TypeAllBack', 'OK', 'Error') | Out-Null
