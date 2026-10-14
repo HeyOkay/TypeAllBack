@@ -19,6 +19,15 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        // Test window only: no instance marker, keyboard hook or tray in this process.
+        if (e.Args.Contains(FieldTesterWindow.Argument))
+        {
+            ShutdownMode = ShutdownMode.OnMainWindowClose;
+            GlassPreviewOptions.SetEnabled(TraySettings.Load().GlassPreview);
+            MainWindow = FieldTesterWindow.Create();
+            MainWindow.Show();
+            return;
+        }
         // Keep the named object alive for the whole application lifetime.
         // No mutex ownership/wait is needed: only its atomic creation reserves
         // the slot. A second process exits before installing a keyboard hook.

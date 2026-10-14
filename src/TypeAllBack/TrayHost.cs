@@ -22,7 +22,9 @@ internal sealed class TrayHost : IDisposable
         _menu.AddToggle("Утилита включена", () => settings.Enabled, value => { enabled(value); settings.Enabled = value; settings.Save(); });
         _menu.AddToggle("Исправлять перед Enter", () => AutoEnterOptions.Enabled, AutoEnterOptions.SetEnabled);
         _menu.AddToggle("Звук исправления", () => sound.Enabled, value => { sound.SetEnabled(value); settings.Sound = value; settings.Save(); });
+        _menu.AddToggle("Стеклянная подсказка", () => GlassPreviewOptions.Enabled, GlassPreviewOptions.SetEnabled);
         _menu.AddCommand("Отладка…", debug);
+        _menu.AddCommand("Тестовые поля…", OpenFieldTester);
         _menu.Separator();
         _menu.AddToggle("Запускать с Windows", AutoStartEnabled, SetAutoStart);
         _menu.AddToggle("Проверять обновления", () => settings.CheckUpdates, value => { settings.CheckUpdates = value; settings.Save(); if (value && UpdateChecker.Https(Feed, out _)) _ = CheckUpdates(false); });
@@ -33,6 +35,16 @@ internal sealed class TrayHost : IDisposable
         _updateTimer.Tick += (_, _) => { if (settings.CheckUpdates) _ = CheckUpdates(false); };
         _updateTimer.Start();
         if (settings.CheckUpdates && UpdateChecker.Https(Feed, out _)) _ = CheckUpdates(false);
+    }
+    private static void OpenFieldTester()
+    {
+        try
+        {
+            if (Environment.ProcessPath is { } path)
+                Process.Start(new ProcessStartInfo(path, FieldTesterWindow.Argument) { UseShellExecute = false })?.Dispose();
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        { Trace.WriteLine("Field tester start failed: " + e.GetType().Name); }
     }
     private async Task CheckUpdates(bool manual)
     {

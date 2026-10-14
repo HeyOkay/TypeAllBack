@@ -27,4 +27,6 @@
   <EmbeddedResource Include="Assets\Correction.wav" LogicalName="TypeAllBack.Correction.wav" />
   <EmbeddedResource Include="Models\en.json" LogicalName="LayoutPreview.Models.en.json" />
   <EmbeddedResource Include="Models\ru.json" LogicalName="LayoutPreview.Models.ru.json" />
+  <!-- Local test images for the field tester: Debug output only, never published or embedded. -->
+  <None Update="TestAssets\**" Condition="'$(Configuration)' == 'Debug'" CopyToOutputDirectory="PreserveNewest" />
 </ItemGroup></Project>

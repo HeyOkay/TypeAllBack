@@ -26,3 +26,6 @@ src/Installer/GeneratedFiles.wxs
 
 # Local agent instructions
 /AGENTS.md
+
+# Local-only test images (Debug field tester); never published
+src/TypeAllBack/TestAssets/
