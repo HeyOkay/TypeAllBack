@@ -105,7 +105,13 @@ internal sealed class UiaTextEditor : IDisposable
             double captureMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             PerformanceDiagnostics.Observe("capture", captureMs);
             if (_paused || generation != Volatile.Read(ref _focusGeneration)) continue;
-            Publish(snapshot);
+            // A provider can change text or selection while it is being read. That race
+            // says nothing about the field: keep the previous snapshot (still bounded by
+            // MaximumSnapshotAgeMs) instead of reporting the editor as unavailable,
+            // which hid the preview and could end the session.
+            if (snapshot != null || !IsTransientCaptureRace(LastCaptureFailure) ||
+                Volatile.Read(ref _snapshot) is not { } kept || kept.Foreground != Native.GetForegroundWindow())
+                Publish(snapshot);
             PerformanceDiagnostics.Flush();
             nextCaptureAt = Environment.TickCount64 + (captureMs >= 50 ? 80 : 35);
             _wake.WaitOne(EditorPolling.Delay(Environment.TickCount64, Interlocked.Read(ref _lastInputAt), snapshot != null, captureMs));
@@ -647,6 +653,13 @@ internal sealed class UiaTextEditor : IDisposable
         _lastTextValueDifferenceAt = now;
         Trace.WriteLine($"UIA stable TextPattern fallback textLength={textLength} valueLength={valueLength} selection={start},{end}");
     }
+
+    internal static bool IsTransientCaptureRace(string stage) =>
+        (stage.Contains("во время снимка", StringComparison.Ordinal) ||
+         stage.Contains("во время чтения оформления", StringComparison.Ordinal)) &&
+        (stage.Contains("Значение поля", StringComparison.Ordinal) ||
+         stage.Contains("выделени", StringComparison.OrdinalIgnoreCase) ||
+         stage.Contains("Текст", StringComparison.Ordinal));
 
     internal static bool IsChromiumWindow(string nativeClass) =>
         nativeClass.StartsWith("Chrome_", StringComparison.Ordinal);
