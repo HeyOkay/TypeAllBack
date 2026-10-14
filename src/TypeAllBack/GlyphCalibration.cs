@@ -12,14 +12,17 @@ internal static class GlyphCalibration
     private static long _lastAt;
     public static event Action? Changed;
 
-    // Only substituted families: an available font is already rendered exactly.
+    // Only substituted families: an available font is already rendered exactly. The caret
+    // height is part of the key: the same reported family in a field with another line
+    // height (VK vs Google settings, both "Roboto") is another measurement, not a mix.
     internal static string? Key(EditorSnapshot s)
     {
         string family = s.FontFamilyName.Trim();
-        if (s.AutomationIdentity.Length == 0 || family.Length == 0 ||
+        int height = s.Caret.Bottom - s.Caret.Top;
+        if (s.AutomationIdentity.Length == 0 || family.Length == 0 || height is < 8 or > 200 ||
             s.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal)) return null;
         if (!PreviewFontResolver.Resolve(family, s.FontWeightValue, s.FontItalic).Substituted) return null;
-        return $"{family.ToLowerInvariant()}|{s.FontWeightValue}|{s.FontItalic}";
+        return $"{family.ToLowerInvariant()}|{s.FontWeightValue}|{s.FontItalic}|{height}";
     }
 
     // Ratios of the caret height (baseline, x-height) and of the x-height (stem).

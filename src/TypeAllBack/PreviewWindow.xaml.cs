@@ -71,9 +71,14 @@ public partial class PreviewWindow : Window
             // On light fields the mockup's glass is slightly cool (fill 246/247/249, text
             // 95/99/104 measured); a cool near-black reproduces that tint.
             Color glassToward = dark ? Colors.White : Color.FromRgb(16, 24, 40);
-            _glassFill = WithAlpha(Mix(basis, glassToward, dark ? 0.11 : 0.043), (byte)Math.Round((dark ? 0.72 : 0.80) * 255));
-            _glassLit = dark ? Color.FromArgb(0x38, 255, 255, 255) : Color.FromArgb(0xE6, 255, 255, 255);
-            _glassShade = dark ? Color.FromArgb(0x14, 255, 255, 255) : Color.FromArgb(0x0F, 0, 0, 0);
+            // The mockup's dark field is #383A40. On a near-black field (Claude desktop #202020)
+            // the same lift left the pill and its edges almost invisible, so darker fields get
+            // a stronger lift and brighter edges (the mockup's values from luminance 0.22 up).
+            double lift = dark ? Math.Clamp(0.11 + (0.22 - Luminance(basis)) * 0.85, 0.11, 0.20) : 0.043;
+            double extra = dark ? (lift - 0.11) / 0.09 : 0;
+            _glassFill = WithAlpha(Mix(basis, glassToward, lift), (byte)Math.Round((dark ? 0.72 : 0.80) * 255));
+            _glassLit = dark ? Color.FromArgb((byte)Math.Round(0x38 + 0x20 * extra), 255, 255, 255) : Color.FromArgb(0xE6, 255, 255, 255);
+            _glassShade = dark ? Color.FromArgb((byte)Math.Round(0x14 + 0x0C * extra), 255, 255, 255) : Color.FromArgb(0x0F, 0, 0, 0);
             PreviewBorder.Background = Solid(_glassFill);
             PreviewBorder.BorderBrush = Brushes.Transparent;
             PreviewText.Foreground = Solid(Mix(basis, glassToward, dark ? 0.70 : 0.66));
@@ -130,30 +135,10 @@ public partial class PreviewWindow : Window
         GlassShadowClip.Visibility = Visibility.Visible;
     }
 
-    // Stroke-to-x-height ratio of each installed weight of the fallback family, from the
-    // outline of 'l' (a plain stem). Rendering thickens stems by roughly 0.4 px with
-    // antialiasing; the field's ratio was measured from rendered pixels, so the same
-    // allowance is added here at the current pixel size before comparing.
-    private static readonly Dictionary<(string, bool), (int Weight, double Stem, double XHeight)[]> StemTables = new();
-    private int MatchWeight(string family, bool italic, double target, int fallback)
-    {
-        if (!StemTables.TryGetValue((family, italic), out var table))
-        {
-            var faces = new List<(int, double, double)>();
-            foreach (int w in new[] { 300, 350, 400, 500, 600, 700 })
-            {
-                var typeface = new Typeface(new FontFamily(family), italic ? FontStyles.Italic : FontStyles.Normal,
-                    FontWeight.FromOpenTypeWeight(w), FontStretches.Normal);
-                if (!typeface.TryGetGlyphTypeface(out var glyphs) || glyphs.Weight.ToOpenTypeWeight() != w ||
-                    glyphs.XHeight <= 0 || !glyphs.CharacterToGlyphMap.TryGetValue('l', out ushort l)) continue;
-                faces.Add((w, glyphs.AdvanceWidths[l] - glyphs.LeftSideBearings[l] - glyphs.RightSideBearings[l], glyphs.XHeight));
-            }
-            StemTables[(family, italic)] = table = faces.ToArray();
-        }
-        if (table.Length == 0) return fallback;
-        double px = PreviewText.FontSize * VisualTreeHelper.GetDpi(this).DpiScaleY;
-        return table.MinBy(face => Math.Abs((face.Stem * px + 0.4) / (face.XHeight * px) - target)).Weight;
-    }
+    private double TextBaseline(bool italic, double scale) =>
+        new FormattedText(PreviewText.Text.Length > 0 ? PreviewText.Text : "x", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(PreviewText.FontFamily, italic ? FontStyles.Italic : FontStyles.Normal, PreviewText.FontWeight, PreviewText.FontStretch),
+            PreviewText.FontSize, Brushes.Black, null, TextFormattingMode.Display, scale).Baseline;
 
     private static double XHeightEm(string family, FontWeight weight, bool italic) =>
         new Typeface(new FontFamily(family), italic ? FontStyles.Italic : FontStyles.Normal, weight, FontStretches.Normal)
@@ -293,10 +278,6 @@ public partial class PreviewWindow : Window
         if (animateFirstAppearance || fontSource.Length > 0)
         {
             int weight = fontWeight is >= 100 and <= 900 ? fontWeight : 400;
-            // A substituted family takes the fallback weight whose stroke density matches the
-            // field's measured glyphs (GlyphCalibration), not the reported weight number.
-            if (stemToXHeight > 0 && fontChoice.Substituted)
-                weight = MatchWeight(fontChoice.Used, fontItalic, stemToXHeight, weight);
             PreviewText.FontWeight = FontWeight.FromOpenTypeWeight(weight);
             PreviewText.FontStyle = fontItalic ? FontStyles.Italic : FontStyles.Normal;
         }
@@ -339,6 +320,15 @@ public partial class PreviewWindow : Window
             if (double.IsFinite(size) && size / _layoutScale is >= 6 and <= 96) PreviewText.FontSize = size;
         }
         PreviewText.Text = text.TrimEnd();
+        if (baselineRatio > 0)
+        {
+            // The text baseline inside the pill falls on a whole device pixel, so it lands
+            // exactly on the field's measured baseline row instead of rounding a pixel lower.
+            double baselinePx = (PreviewBorder.BorderThickness.Top + PreviewBorder.Padding.Top + TextBaseline(fontItalic, overlayScale)) * overlayScale;
+            double shift = (Math.Ceiling(baselinePx - 0.01) - baselinePx) / overlayScale;
+            var padding = PreviewBorder.Padding;
+            PreviewBorder.Padding = new Thickness(padding.Left, padding.Top + shift, padding.Right, Math.Max(0, padding.Bottom - shift));
+        }
         // Measure the actual Display-mode TextBlock. FormattedText used different
         // glyph metrics and could leave an apparent extra blank at the right edge.
         PreviewText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -379,16 +369,25 @@ public partial class PreviewWindow : Window
 
         int visibleLeftPx = caretPx.Right + gapPx;
         int visibleTopPx = caretPx.Top + (caretHeightPx - previewHeightPx) / 2;
+        int textShiftPx = 0;
         if (baselineRatio > 0)
         {
-            // Measured baseline of the field font: put our text on the same line instead of
-            // centering the pill (fonts split the line box differently above and below).
-            var typeface = new Typeface(PreviewText.FontFamily, PreviewText.FontStyle, PreviewText.FontWeight, PreviewText.FontStretch);
-            var line = new FormattedText(PreviewText.Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-                typeface, PreviewText.FontSize, Brushes.Black, overlayScale);
-            double textBaselinePx = (PreviewBorder.BorderThickness.Top + PreviewBorder.Padding.Top + line.Baseline) * overlayScale;
-            visibleTopPx = (int)Math.Round(caretPx.Top + baselineRatio * caretHeightPx - textBaselinePx);
+            // Measured baseline of the field font: our text goes on the same line, while the
+            // pill stays centered on the caret like the field's own line (as where no
+            // measurement exists: omnibox, ChatGPT). Segoe UI's line box has much more room
+            // above the x-height than a web font's, so moving the whole pill to the baseline
+            // left it riding high (Discord, Claude, Chrome Web Store). The text moves inside
+            // the pill instead, by at most a quarter of its height.
+            int textBaselinePx = (int)Math.Round((PreviewBorder.BorderThickness.Top + PreviewBorder.Padding.Top +
+                TextBaseline(fontItalic, overlayScale)) * overlayScale);
+            int baselinePx = (int)Math.Round(caretPx.Top + baselineRatio * caretHeightPx);
+            int limit = previewHeightPx / 4;
+            textShiftPx = Math.Clamp(baselinePx - visibleTopPx - textBaselinePx, -limit, limit);
+            visibleTopPx = baselinePx - textBaselinePx - textShiftPx;
         }
+        // Equal and opposite margins move the text without changing the pill's size.
+        double textShiftDip = textShiftPx / overlayScale;
+        if (PreviewText.Margin.Top != textShiftDip) PreviewText.Margin = new Thickness(0, textShiftDip, 0, -textShiftDip);
         int windowLeftPx = visibleLeftPx - reservePx;
         int windowTopPx = visibleTopPx - verticalReservePx;
 
