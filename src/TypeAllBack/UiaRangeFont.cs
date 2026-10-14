@@ -24,6 +24,9 @@ internal static class RangeFontExperiment
 
 internal sealed class UiaRangeFont
 {
+    // Without a usable reported font the estimate is the only size source, so a
+    // failed or slow attempt is retried on later formatting refreshes (>= 500 ms apart).
+    private const int MaxUnreportedAttempts = 3;
     private string _context = "";
     private int _revision = -1, _attempts;
     private double _stable, _lastMs;
@@ -33,7 +36,14 @@ internal sealed class UiaRangeFont
     public event Action<string>? StatusChanged;
 
     private readonly Func<TextPatternRange, int, (string Text, Rect Bounds)?> _read;
-    internal UiaRangeFont(Func<TextPatternRange, int, (string Text, Rect Bounds)?>? read = null) => _read = read ?? Read;
+    private readonly FontScaleMemory _memory;
+    private string _learnedContext = "";
+    // Production instances share the persistent memory; injected test readers get a private one.
+    internal UiaRangeFont(Func<TextPatternRange, int, (string Text, Rect Bounds)?>? read = null, FontScaleMemory? memory = null)
+    {
+        _read = read ?? Read;
+        _memory = memory ?? (read == null ? FontScaleMemory.Shared : new FontScaleMemory(null));
+    }
 
     // Reported attributes remain the baseline; long ranges may validate their size.
     internal static bool HasReportedFont(EditorSnapshot snapshot) =>
@@ -41,7 +51,7 @@ internal sealed class UiaRangeFont
         !string.IsNullOrWhiteSpace(snapshot.FontFamilyName) &&
         !PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic).Substituted &&
         PreviewMetrics.HasReliableFormatting(snapshot.FontSource) &&
-        !snapshot.FontSource.StartsWith("UIA range-width estimate", StringComparison.Ordinal);
+        !snapshot.FontSource.StartsWith("UIA range-width", StringComparison.Ordinal);
 
     // One attempt per field/focus/DPI/font context, including unsupported responses.
     // Caret-height jitter cannot rearm a rejected measurement.
@@ -50,7 +60,49 @@ internal sealed class UiaRangeFont
         snapshot.SelectionEnd >= (HasReportedFont(snapshot) ? 5 : 2) && snapshot.AutomationIdentity.Length > 0 &&
         !snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal);
 
+    // A font WPF cannot render is sized from range widths. Until that measurement succeeds
+    // in a new field, the remembered scale for the same font is used, so the preview has
+    // the right size immediately instead of the reported size of a different font.
     public EditorSnapshot Enrich(EditorSnapshot snapshot, TextPatternRange caret, int generation)
+    {
+        var result = EnrichCore(snapshot, caret, generation);
+        string? key = MemoryKey(snapshot, out bool relative);
+        if (key == null || !RangeFontExperiment.Enabled) return result;
+        double unit = relative ? snapshot.FontSizeDip : 1;
+        bool known = _memory.TryGet(key, out double remembered);
+        if (_stable > 0)
+        {
+            if (_learnedContext == _context) return result;
+            _learnedContext = _context;
+            _memory.Record(key, _stable / unit);
+            // A measurement close to the remembered size keeps it: no visible jump.
+            if (known && Math.Abs(_stable - remembered * unit) <= remembered * unit * 0.06) _stable = remembered * unit;
+            return Apply(snapshot);
+        }
+        return known ? snapshot with
+        {
+            FontSizeDip = remembered * unit,
+            FontSource = "UIA range-width memory" + (snapshot.FontFamilyName.Length == 0 ? " (family fallback)" : "")
+        } : result;
+    }
+
+    // Only fonts without authoritative metadata are remembered. A reported family uses a
+    // size ratio (valid at any size and DPI); a field without a size uses its class.
+    internal static string? MemoryKey(EditorSnapshot snapshot, out bool relative)
+    {
+        relative = false;
+        if (snapshot.AutomationIdentity.Length == 0 || HasReportedFont(snapshot) ||
+            snapshot.FontSource.StartsWith("UIA omnibox", StringComparison.Ordinal) ||
+            snapshot.FontSource.StartsWith("UIA range-width", StringComparison.Ordinal)) return null;
+        string family = snapshot.FontFamilyName.Trim();
+        var choice = PreviewFontResolver.Resolve(family, snapshot.FontWeightValue, snapshot.FontItalic);
+        string face = $"{family.ToLowerInvariant()}|{snapshot.FontWeightValue}|{snapshot.FontItalic}|{choice.Used}";
+        if (family.Length > 0 && double.IsFinite(snapshot.FontSizeDip) && snapshot.FontSizeDip is > 0 and <= 256)
+        { relative = true; return "scale|" + face; }
+        return "size|" + snapshot.FontSource + "|" + face;
+    }
+
+    private EditorSnapshot EnrichCore(EditorSnapshot snapshot, TextPatternRange caret, int generation)
     {
         if (!RangeFontExperiment.Enabled) return snapshot;
         int sampleEnd = Math.Clamp(snapshot.SelectionEnd, 0, snapshot.Text.Length);
@@ -69,7 +121,7 @@ internal sealed class UiaRangeFont
         }
         if (_stable > 0) return Apply(snapshot);
         if (reported && _checkedReported) return snapshot;
-        if (_attempts >= 1 || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < (reported ? 5 : 2))
+        if (_attempts >= (reported ? 1 : MaxUnreportedAttempts) || snapshot.SelectionStart != snapshot.SelectionEnd || snapshot.SelectionEnd < (reported ? 5 : 2))
             return snapshot;
         long started = Stopwatch.GetTimestamp();
         try
@@ -79,8 +131,9 @@ internal sealed class UiaRangeFont
             _attempts++;
             var longer = _read(caret, Math.Min(8, snapshot.SelectionEnd));
             if (longer == null || longer.Value.Text.Length < (reported ? 5 : 2)) { SetStatus("Короткий видимый диапазон недоступен"); return snapshot; }
-            if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > 25)
-            { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); _attempts = 1; return snapshot; }
+            // Cross-process Chromium/Electron range calls are slower than native ones.
+            if (Stopwatch.GetElapsedTime(started).TotalMilliseconds > (reported ? 25 : 60))
+            { SetStatus("Диапазон медленный; дополнительные запросы пропущены"); return snapshot; }
             var shorter = _read(caret, longer.Value.Text.Length == 2 ? 1 : 2);
             if (shorter == null) { SetStatus("Короткий контрольный диапазон недоступен"); return snapshot; }
             fontChoice = PreviewFontResolver.Resolve(snapshot.FontFamilyName, snapshot.FontWeightValue, snapshot.FontItalic, longer.Value.Text);
@@ -117,7 +170,7 @@ internal sealed class UiaRangeFont
         {
             _lastMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             PerformanceDiagnostics.Observe("range-font", _lastMs);
-            string report = $"поле={snapshot.Editor.ToInt64():X}; requestedFamily={fontChoice.Requested}; usedFamily={fontChoice.Used}; fallbackReason={fontChoice.Reason}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/1; cached={_stable > 0}";
+            string report = $"поле={snapshot.Editor.ToInt64():X}; requestedFamily={fontChoice.Requested}; usedFamily={fontChoice.Used}; fallbackReason={fontChoice.Reason}; {Status}; attemptMs={_lastMs:F2}; попыток={_attempts}/{(reported ? 1 : MaxUnreportedAttempts)}; cached={_stable > 0}";
             if (_lastStatus != report) { _lastStatus = report; StatusChanged?.Invoke(report); }
         }
     }
