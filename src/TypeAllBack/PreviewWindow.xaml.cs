@@ -116,8 +116,12 @@ public partial class PreviewWindow : Window
         GlassShadowClip.Height = height + pad * 2;
         GlassShadow.Margin = new Thickness(pad);
         GlassShadow.CornerRadius = new CornerRadius(radius);
-        GlassShadow.Effect = new BlurEffect { Radius = blur, KernelType = KernelType.Gaussian };
-        GlassShadow.Opacity = _glassShadowOpacity;
+        // One reused effect: a new BlurEffect on every frame of the width animation had to be
+        // realized again each time and dropped the frame rate.
+        if (GlassShadow.Effect is not BlurEffect shadowBlur)
+            GlassShadow.Effect = shadowBlur = new BlurEffect { KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
+        if (shadowBlur.Radius != blur) shadowBlur.Radius = blur;
+        if (GlassShadow.Opacity != _glassShadowOpacity) GlassShadow.Opacity = _glassShadowOpacity;
         var outside = new CombinedGeometry(GeometryCombineMode.Exclude,
             new RectangleGeometry(new Rect(0, 0, width + pad * 2, height + pad * 2)),
             new RectangleGeometry(new Rect(pad, pad, width, height), radius, radius));
@@ -212,6 +216,24 @@ public partial class PreviewWindow : Window
     private const int EnterDurationMs = 150;
     private const int ResizeDurationMs = 120;
     private const int AcceptDurationMs = 180;
+    private const int ExitDurationMs = 120;
+    // Animations run at the display's refresh rate. A fixed 60 fps looked choppy next to
+    // Discord and Windows animating at 120-165 Hz.
+    private static readonly int FrameRate = DisplayRefreshRate();
+    private static int DisplayRefreshRate()
+    {
+        IntPtr screen = GetDC(IntPtr.Zero);
+        if (screen == IntPtr.Zero) return 60;
+        try { int hz = GetDeviceCaps(screen, 116); return hz is >= 60 and <= 360 ? hz : 60; } // VREFRESH
+        finally { ReleaseDC(IntPtr.Zero, screen); }
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr window);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr window, IntPtr dc);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern int GetDeviceCaps(IntPtr dc, int index);
+    // Blur of the whole pill at the start of appearing and the end of hiding.
+    private const double FadeBlurDip = 4;
+    private int _visibilityGeneration;
+    private bool _hiding;
 
     private bool _acceptAnimationRunning;
     private IntPtr _hwnd;
@@ -230,6 +252,14 @@ public partial class PreviewWindow : Window
         Closed += (_, _) => _theme.Dispose();
         GlassPreviewOptions.Changed += OnGlassChanged;
         Closed += (_, _) => GlassPreviewOptions.Changed -= OnGlassChanged;
+        // The glass edges and the shadow are built for an exact size; rebuild them on every
+        // size change so they follow the width animation.
+        PreviewBorder.SizeChanged += (_, e) =>
+        {
+            if (!_glassActive || _acceptAnimationRunning || e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
+            PreviewBorder.Background = GlassSurface(e.NewSize.Width, e.NewSize.Height, PreviewBorder.CornerRadius.TopLeft, _layoutScale);
+            UpdateGlassShadow(e.NewSize.Width, e.NewSize.Height);
+        };
         SourceInitialized += (_, _) =>
         {
             _hwnd = new WindowInteropHelper(this).Handle;
@@ -247,6 +277,8 @@ public partial class PreviewWindow : Window
     {
         if (_acceptAnimationRunning)
             return;
+        bool wasHidden = !IsVisible || _hiding;
+        double fromOpacity = CancelHide();
         if (fieldBackground != _fieldBackground) { _fieldBackground = fieldBackground; ApplyStyle(); }
         using var measurement = PerformanceDiagnostics.Measure("preview-render");
         bool textChanged = _lastRender?.Text != text;
@@ -325,9 +357,12 @@ public partial class PreviewWindow : Window
         // Whole device pixels for the window too: a fractional layered-window width stretched
         // the content by a fraction of a pixel and shifted the left edge by half a pixel.
         Height = Math.Round(Math.Max(40 * _layoutScale, targetHeight + VerticalReserveDip * 2 * _layoutScale) * overlayScale) / overlayScale;
-        Width = Math.Round((LeftReserveDip * _layoutScale + targetWidth + 8 * _layoutScale) * overlayScale) / overlayScale;
+        // Room for the wider of the old and new pill while the width animates.
+        Width = Math.Round((LeftReserveDip * _layoutScale + Math.Max(targetWidth, oldWidth) + 8 * _layoutScale) * overlayScale) / overlayScale;
         RootCanvas.Width = Width;
         RootCanvas.Height = Height;
+        PreviewLayer.Width = Width;
+        PreviewLayer.Height = Height;
 
         if (!IsVisible)
             Show();
@@ -369,22 +404,15 @@ public partial class PreviewWindow : Window
         }
 
         if (!SystemParameters.ClientAreaAnimation) { StopVisualAnimations(); PreviewBorder.Opacity = RestingOpacity; PreviewScale.ScaleX = PreviewScale.ScaleY = 1; PreviewTranslate.X = 0; }
-        else if (animateFirstAppearance)
+        else if (animateFirstAppearance || wasHidden)
         {
             StopVisualAnimations();
             PreviewBorder.Opacity = RestingOpacity;
-            PreviewText.Opacity = 0;
-            // The clipped glass shadow cannot scale with the pill, so glass skips the zoom-in.
-            double startScale = _glassActive ? 1.0 : 0.96;
-            PreviewScale.ScaleX = PreviewScale.ScaleY = startScale;
+            PreviewScale.ScaleX = PreviewScale.ScaleY = 1;
             PreviewTranslate.X = 0;
-
-            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-            // Keep the background opaque throughout the entrance so following
-            // document text is covered; only the inactive label fades into view.
-            Animate(PreviewText, UIElement.OpacityProperty, 0, 1, EnterDurationMs, ease);
-            Animate(PreviewScale, ScaleTransform.ScaleXProperty, startScale, 1.0, EnterDurationMs, ease);
-            Animate(PreviewScale, ScaleTransform.ScaleYProperty, startScale, 1.0, EnterDurationMs, ease);
+            // Pill, text and shadow emerge together from a transparent blur. A hide that
+            // was still fading continues from its current opacity instead of blinking.
+            FadeIn(wasHidden ? fromOpacity : 0);
         }
         else
         {
@@ -395,14 +423,14 @@ public partial class PreviewWindow : Window
             PreviewScale.ScaleX = PreviewScale.ScaleY = 1;
             PreviewTranslate.X = 0;
 
-            if (textChanged && !_glassActive && SystemParameters.ClientAreaAnimation && Math.Abs(targetWidth - oldWidth) > 0.5)
+            if (textChanged && SystemParameters.ClientAreaAnimation && Math.Abs(targetWidth - oldWidth) > 0.5)
             {
                 var widthAnim = new DoubleAnimation(oldWidth, targetWidth, TimeSpan.FromMilliseconds(ResizeDurationMs))
                 {
                     EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
                     FillBehavior = FillBehavior.Stop
                 };
-                Timeline.SetDesiredFrameRate(widthAnim, 60);
+                Timeline.SetDesiredFrameRate(widthAnim, FrameRate);
                 PreviewBorder.BeginAnimation(WidthProperty, widthAnim);
             }
         }
@@ -414,6 +442,7 @@ public partial class PreviewWindow : Window
             return;
 
         _acceptAnimationRunning = true;
+        CancelHide();
         // The clipped shadow cannot follow the sliding pill.
         GlassShadowClip.Visibility = Visibility.Collapsed;
         StopVisualAnimations();
@@ -432,7 +461,7 @@ public partial class PreviewWindow : Window
             EasingFunction = ease,
             FillBehavior = FillBehavior.HoldEnd
         };
-        Timeline.SetDesiredFrameRate(move, 60);
+        Timeline.SetDesiredFrameRate(move, FrameRate);
         move.Completed += (_, _) => done.TrySetResult(true);
 
         // Keep the preview intact briefly, then make the dissolve unmistakable and finish
@@ -447,7 +476,7 @@ public partial class PreviewWindow : Window
         fade.KeyFrames.Add(new EasingDoubleKeyFrame(0.0, KeyTime.FromPercent(0.50),
             new CubicEase { EasingMode = EasingMode.EaseIn }));
         fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(1.00)));
-        Timeline.SetDesiredFrameRate(fade, 60);
+        Timeline.SetDesiredFrameRate(fade, FrameRate);
 
         PreviewTranslate.BeginAnimation(TranslateTransform.XProperty, move);
         PreviewBorder.BeginAnimation(OpacityProperty, fade);
@@ -483,7 +512,7 @@ public partial class PreviewWindow : Window
             EasingFunction = ease,
             FillBehavior = FillBehavior.HoldEnd
         };
-        Timeline.SetDesiredFrameRate(animation, 60);
+        Timeline.SetDesiredFrameRate(animation, FrameRate);
         target.BeginAnimation(property, animation);
     }
 
@@ -494,7 +523,7 @@ public partial class PreviewWindow : Window
             EasingFunction = ease,
             FillBehavior = FillBehavior.HoldEnd
         };
-        Timeline.SetDesiredFrameRate(animation, 60);
+        Timeline.SetDesiredFrameRate(animation, FrameRate);
         target.BeginAnimation(property, animation);
     }
 
@@ -517,12 +546,84 @@ public partial class PreviewWindow : Window
 
     public void HidePreview()
     {
-        if (!_acceptAnimationRunning) FieldColors.PreviewVisible = false;
-        if (IsVisible && !_acceptAnimationRunning)
+        if (_acceptAnimationRunning) return;
+        if (!IsVisible) { FieldColors.PreviewVisible = false; return; }
+        // Field sampling stays away until the fading pill is really gone (HideNow).
+        FadeOutAndHide();
+    }
+
+    private void FadeIn(double from)
+    {
+        int generation = ++_visibilityGeneration;
+        PreviewLayer.BeginAnimation(OpacityProperty, null);
+        PreviewLayer.Effect = null;
+        if (!SystemParameters.ClientAreaAnimation) { PreviewLayer.Opacity = 1; return; }
+        PreviewLayer.Opacity = Math.Clamp(from, 0, 1);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var blur = new BlurEffect { Radius = FadeBlurDip * _layoutScale * (1 - PreviewLayer.Opacity), KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
+        PreviewLayer.Effect = blur;
+        var fade = new DoubleAnimation(1, TimeSpan.FromMilliseconds(EnterDurationMs)) { EasingFunction = ease };
+        var sharpen = new DoubleAnimation(0, TimeSpan.FromMilliseconds(EnterDurationMs)) { EasingFunction = ease };
+        Timeline.SetDesiredFrameRate(fade, FrameRate);
+        Timeline.SetDesiredFrameRate(sharpen, FrameRate);
+        fade.Completed += (_, _) =>
         {
-            StopVisualAnimations();
-            PreviewBorder.Opacity = 0;
-            Hide();
-        }
+            if (generation != _visibilityGeneration) return;
+            // At rest neither an effect nor an animated opacity may remain: ClearType text
+            // and cheap composition need both gone.
+            PreviewLayer.Effect = null;
+            PreviewLayer.BeginAnimation(OpacityProperty, null);
+            PreviewLayer.Opacity = 1;
+        };
+        PreviewLayer.BeginAnimation(OpacityProperty, fade);
+        blur.BeginAnimation(BlurEffect.RadiusProperty, sharpen);
+    }
+
+    private void FadeOutAndHide()
+    {
+        if (_hiding) return;
+        if (!SystemParameters.ClientAreaAnimation) { HideNow(); return; }
+        _hiding = true;
+        PreviewLayer.IsHitTestVisible = false; // a fading hint cannot be clicked
+        int generation = ++_visibilityGeneration;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var blur = new BlurEffect { Radius = 0, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
+        PreviewLayer.Effect = blur;
+        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(ExitDurationMs)) { EasingFunction = ease };
+        var soften = new DoubleAnimation(FadeBlurDip * _layoutScale, TimeSpan.FromMilliseconds(ExitDurationMs)) { EasingFunction = ease };
+        Timeline.SetDesiredFrameRate(fade, FrameRate);
+        Timeline.SetDesiredFrameRate(soften, FrameRate);
+        fade.Completed += (_, _) => { if (generation == _visibilityGeneration) HideNow(); };
+        PreviewLayer.BeginAnimation(OpacityProperty, fade);
+        blur.BeginAnimation(BlurEffect.RadiusProperty, soften);
+    }
+
+    // Stops a running fade-out; returns the opacity the hint had at that moment (0 when it
+    // was not on screen), so a new appearance can continue from there.
+    private double CancelHide()
+    {
+        double current = IsVisible ? PreviewLayer.Opacity : 0;
+        if (!_hiding) return current;
+        _hiding = false;
+        _visibilityGeneration++;
+        PreviewLayer.BeginAnimation(OpacityProperty, null);
+        PreviewLayer.Opacity = 1;
+        PreviewLayer.Effect = null;
+        PreviewLayer.IsHitTestVisible = true;
+        return current;
+    }
+
+    private void HideNow()
+    {
+        _hiding = false;
+        _visibilityGeneration++;
+        StopVisualAnimations();
+        PreviewBorder.Opacity = 0;
+        Hide();
+        PreviewLayer.BeginAnimation(OpacityProperty, null);
+        PreviewLayer.Opacity = 1;
+        PreviewLayer.Effect = null;
+        PreviewLayer.IsHitTestVisible = true;
+        FieldColors.PreviewVisible = false;
     }
 }
