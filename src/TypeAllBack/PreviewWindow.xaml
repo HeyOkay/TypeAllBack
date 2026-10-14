@@ -12,6 +12,11 @@
         Focusable="False"
         SizeToContent="Manual">
     <Canvas x:Name="RootCanvas" Width="340" Height="44" ClipToBounds="False">
+        <!-- Glass only: an even, all-around shadow outside the pill. The clip removes the
+             pill's own area so the translucent glass is not darkened from below. -->
+        <Grid x:Name="GlassShadowClip" Canvas.Left="170" Canvas.Top="4" IsHitTestVisible="False" Visibility="Collapsed">
+            <Border x:Name="GlassShadow" Background="Black" CornerRadius="8"/>
+        </Grid>
         <Border x:Name="PreviewBorder"
                 Canvas.Left="170" Canvas.Top="4"
                 Padding="4,2,4,3"
@@ -36,7 +41,12 @@
                        FontSize="15"
                        Foreground="#CF9A9A9A"
                        TextOptions.TextFormattingMode="Display"
-                       TextOptions.TextRenderingMode="ClearType"/>
+                       TextOptions.TextRenderingMode="ClearType"
+                       RenderOptions.ClearTypeHint="Enabled"/>
+            <!-- A transparent (layered) window silently falls back to grayscale text.
+                 The hint restores ClearType, as in the browser reference: the pill
+                 behind the text is drawn by this window, so the text is never over
+                 undefined content. -->
         </Border>
     </Canvas>
 </Window>

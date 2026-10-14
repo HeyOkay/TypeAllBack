@@ -52,6 +52,8 @@ public partial class App : Application
         _settings.Save();
         AutoEnterOptions.SetEnabled(_settings.AutoEnter);
         AutoEnterOptions.Changed += SaveAutoEnter;
+        GlassPreviewOptions.SetEnabled(_settings.GlassPreview);
+        GlassPreviewOptions.Changed += SaveGlassPreview;
         _sound = new CorrectionSound(_settings.Sound);
         _controller = new LayoutPreviewController();
         _controller.ReplacementConfirmed += _sound.Play;
@@ -66,9 +68,17 @@ public partial class App : Application
         _settings.Save();
     }
 
+    private void SaveGlassPreview(bool enabled)
+    {
+        if (_settings == null) return;
+        _settings.GlassPreview = enabled;
+        _settings.Save();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         AutoEnterOptions.Changed -= SaveAutoEnter;
+        GlassPreviewOptions.Changed -= SaveGlassPreview;
         _tray?.Dispose();
         _controller?.Dispose();
         _sound?.Dispose();

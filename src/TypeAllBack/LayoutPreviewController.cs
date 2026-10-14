@@ -156,6 +156,8 @@ public sealed class LayoutPreviewController : IDisposable
     private int _lastFontWeight;
     private bool _lastFontItalic;
     private string _lastFontSource = "";
+    private uint _lastFieldColor;
+    private double _lastBaselineRatio, _lastStemToXHeight, _lastXHeightRatio;
     private string _lastPreviewDiagnostic = "";
     private int _snapshotUpdateQueued;
     private long _lastVerifiedRevision = -1;
@@ -168,6 +170,17 @@ public sealed class LayoutPreviewController : IDisposable
             Interlocked.Exchange(ref _snapshotUpdateQueued, 0);
             if (_disposed) return;
             if (_deferredStartupInputs.Count > 0) TryAttachDeferredStartup();
+            UpdatePreview();
+        }, DispatcherPriority.Background);
+    }
+    // A newly sampled field background restyles a visible preview without new input.
+    private void OnFieldColorsChanged()
+    {
+        if (_disposed) return;
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            if (_disposed || !_visible) return;
+            _lastVerifiedRevision = -1;
             UpdatePreview();
         }, DispatcherPriority.Background);
     }
@@ -209,6 +222,8 @@ public sealed class LayoutPreviewController : IDisposable
         TextEditor.SetPaused(!_enabled);
         TextEditor.Start();
         TextEditor.SnapshotChanged += OnSnapshotChanged;
+        FieldColors.Changed += OnFieldColorsChanged;
+        GlyphCalibration.Changed += OnFieldColorsChanged;
         _preview.AcceptRequested += (_, _) => { _acceptSource = "Мышь"; AcceptPreview(); };
         _startRules.Changed += OnStartRuleChanged;
         _debugWindow = new SessionDebugWindow(_diagnostics, CaptureDiagnostics, _startRules);
@@ -685,7 +700,10 @@ public sealed class LayoutPreviewController : IDisposable
             _preview.HidePreview();
             return;
         }
-        if (_visible && text == _lastPreview && caret.Left == _lastCaret.Left && caret.Top == _lastCaret.Top &&
+        uint fieldColor = FieldColors.Get(current);
+        GlyphCalibration.TryGet(current, out double baselineRatio, out double stemToXHeight, out double xHeightRatio);
+        if (_visible && text == _lastPreview && fieldColor == _lastFieldColor && baselineRatio == _lastBaselineRatio &&
+            stemToXHeight == _lastStemToXHeight && xHeightRatio == _lastXHeightRatio && caret.Left == _lastCaret.Left && caret.Top == _lastCaret.Top &&
             caret.Right == _lastCaret.Right && caret.Bottom == _lastCaret.Bottom && current.Dpi == _lastDpi &&
             current.FontSizeDip == _lastFontSizeDip && current.FontFamilyName == _lastFontFamilyName &&
             current.FontWeightValue == _lastFontWeight && current.FontItalic == _lastFontItalic &&
@@ -694,8 +712,11 @@ public sealed class LayoutPreviewController : IDisposable
         _lastPreview = text; _lastCaret = caret; _lastDpi = current.Dpi; _lastFontSizeDip = current.FontSizeDip;
         _lastFontFamilyName = current.FontFamilyName;
         _lastFontWeight = current.FontWeightValue; _lastFontItalic = current.FontItalic; _lastFontSource = current.FontSource;
+        _lastFieldColor = fieldColor;
+        _lastBaselineRatio = baselineRatio; _lastStemToXHeight = stemToXHeight; _lastXHeightRatio = xHeightRatio;
         _preview.ShowPreview(text, caret, current.Dpi == 0 ? 96 : current.Dpi, first, current.FontSizeDip,
-            current.FontFamilyName, current.FontWeightValue, current.FontItalic, current.FontSource);
+            current.FontFamilyName, current.FontWeightValue, current.FontItalic, current.FontSource, fieldColor,
+            baselineRatio, stemToXHeight, xHeightRatio);
         PublishAcceptContext(current);
     }
 
@@ -1084,6 +1105,8 @@ public sealed class LayoutPreviewController : IDisposable
         _preview.FontMetricsChanged -= OnPreviewFontMetricsChanged;
         _startRules.Changed -= OnStartRuleChanged;
         TextEditor.SnapshotChanged -= OnSnapshotChanged;
+        FieldColors.Changed -= OnFieldColorsChanged;
+        GlyphCalibration.Changed -= OnFieldColorsChanged;
         _disposed = true; Reset("Утилита остановлена");
         _debugWindow?.Shutdown();
         _keyboard?.Dispose();

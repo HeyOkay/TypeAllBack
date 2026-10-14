@@ -17,6 +17,9 @@
     <Compile Include="../src/TypeAllBack/AutoEnter.cs" Link="AutoEnter.cs" />
     <Compile Include="../src/TypeAllBack/PreviewMetrics.cs" Link="PreviewMetrics.cs" />
     <Compile Include="../src/TypeAllBack/UiaRangeFont.cs" Link="UiaRangeFont.cs" />
+    <Compile Include="../src/TypeAllBack/FontScaleMemory.cs" Link="FontScaleMemory.cs" />
+    <Compile Include="../src/TypeAllBack/FieldColors.cs" Link="FieldColors.cs" />
+    <Compile Include="../src/TypeAllBack/GlyphCalibration.cs" Link="GlyphCalibration.cs" />
     <Compile Include="../src/TypeAllBack/PreviewFontResolver.cs" Link="PreviewFontResolver.cs" />
     <Compile Include="../src/TypeAllBack/PreviewTheme.cs" Link="PreviewTheme.cs" />
     <Compile Include="../src/TypeAllBack/NotepadEditor.cs" Link="NotepadEditor.cs" />

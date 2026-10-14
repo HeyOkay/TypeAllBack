@@ -112,6 +112,12 @@ internal sealed class UiaTextEditor : IDisposable
             if (snapshot != null || !IsTransientCaptureRace(LastCaptureFailure) ||
                 Volatile.Read(ref _snapshot) is not { } kept || kept.Foreground != Native.GetForegroundWindow())
                 Publish(snapshot);
+            // After publishing, so field-color sampling never delays text snapshots.
+            if (snapshot != null)
+            {
+                FieldColors.Refresh(snapshot);
+                GlyphCalibration.Refresh(snapshot, FieldColors.PreviewVisible);
+            }
             PerformanceDiagnostics.Flush();
             nextCaptureAt = Environment.TickCount64 + (captureMs >= 50 ? 80 : 35);
             _wake.WaitOne(EditorPolling.Delay(Environment.TickCount64, Interlocked.Read(ref _lastInputAt), snapshot != null, captureMs));

@@ -656,6 +656,46 @@ oneProbe.Enrich(measurable with {Caret=new Native.RECT {Top=0,Bottom=26}},null!,
 Eq(probeReads,1,"caret rectangle jitter does not reset the one-attempt budget");
 oneProbe.Enrich(measurable,null!,2);
 Eq(probeReads,2,"independent focus context receives one new attempt");
+int fallbackReads=0;
+var fallbackProbe=new UiaRangeFont((_,_) => { fallbackReads++; return null; });
+var fallbackMeasurable=reportedFont with {FontFamilyName="LayoutPreview-Nonexistent-Font-123",SelectionStart=5,SelectionEnd=5};
+for(int attempt=0;attempt<5;attempt++) fallbackProbe.Enrich(fallbackMeasurable,null!,1);
+Eq(new TraySettings().GlassPreview,true,"glass preview is the default style for new settings");
+{
+    // Synthetic strip: x-height band rows 6..14 with four 2-px stems, one ascender, one descender.
+    const int gw=30, gh=20; const int back=unchecked((int)0xFF383A40), ink=unchecked((int)0xFFDBDEE1);
+    var strip=Enumerable.Repeat(back,gw*gh).ToArray();
+    void Stem(int x,int y0,int y1){ for(int y=y0;y<=y1;y++){ strip[y*gw+x]=ink; strip[y*gw+x+1]=ink; } }
+    Stem(3,6,18); Stem(8,1,14); Stem(13,6,14); Stem(18,6,14);
+    Eq(GlyphCalibration.Measure(strip,gw,gh,0xFF383A40u,out double measuredBaseline,out double measuredStem,out int measuredXHeight),true,"typed glyph strip is measurable");
+    Eq(measuredBaseline,15.0,"baseline is the lower edge of the dense x-height band, not the descender");
+    Eq(Math.Abs(measuredStem-2.0/9)<1e-9,true,"stem width is measured relative to the x-height");
+    Eq(measuredXHeight,9,"x-height spans the dense band only");
+    var underlined=(int[])strip.Clone();
+    for(int x=0;x<gw;x++) underlined[16*gw+x]=unchecked((int)0xFFED4245);
+    Eq(GlyphCalibration.Measure(underlined,gw,gh,0xFF383A40u,out double underlinedBaseline,out _,out _) && underlinedBaseline==15.0,true,"a red spell-check underline is not taken for text");
+    Eq(GlyphCalibration.Measure(Enumerable.Repeat(back,gw*gh).ToArray(),gw,gh,0xFF383A40u,out _,out _,out _),false,"an empty strip yields no measurement");
+}
+Eq(FieldColors.Dominant(Enumerable.Repeat(unchecked((int)0xFF313338),40).ToArray()),0xFF313338u,"uniform field strip yields its background");
+Eq(FieldColors.Dominant(Enumerable.Repeat(unchecked((int)0xFF313338),20).Concat(Enumerable.Repeat(unchecked((int)0xFFDBDEE1),20)).ToArray()),0u,"strip crossed by text or images is rejected");
+Eq(FieldColors.Dominant(Enumerable.Repeat(unchecked((int)0xFF313338),30).Concat(Enumerable.Repeat(unchecked((int)0xFFDBDEE1),10)).ToArray()),0xFF313338u,"a few glyph pixels keep the dominant background");
+Eq(fallbackReads,3,"unavailable family retries range fitting a bounded number of times");
+var fontMemory=new FontScaleMemory(null);
+Eq(fontMemory.Record("test",0.9),0.9,"first font measurement is remembered");
+Eq(Math.Abs(fontMemory.Record("test",1.0)-0.95)<1e-9,true,"later measurements refine the remembered scale");
+Eq(UiaRangeFont.MemoryKey(reportedFont,out _),(string?)null,"available reported fonts are never replaced by memory");
+var unknownFace=reportedFont with {FontFamilyName="LayoutPreview-Nonexistent-Font-123",SelectionStart=5,SelectionEnd=5};
+fontMemory.Record(UiaRangeFont.MemoryKey(unknownFace,out bool relativeKey)!,0.9);
+Eq(relativeKey,true,"reported size of an unavailable family is remembered as a ratio");
+var rememberedFont=new UiaRangeFont((_,_) => null, fontMemory).Enrich(unknownFace,null!,1);
+Eq(Math.Abs(rememberedFont.FontSizeDip-14.4)<1e-9,true,"remembered scale applies before a new measurement succeeds");
+Eq(rememberedFont.FontSource.StartsWith("UIA range-width memory"),true,"remembered size is labelled in diagnostics");
+Eq(UiaTextEditor.IsTransientCaptureRace("Текст документа изменился во время снимка"),true,"provider text race keeps the previous snapshot");
+Eq(UiaTextEditor.IsTransientCaptureRace("Конец выделения изменился во время снимка"),true,"selection race keeps the previous snapshot");
+Eq(UiaTextEditor.IsTransientCaptureRace("Выделение native-поля изменилось во время чтения оформления"),true,"native selection race keeps the previous snapshot");
+Eq(UiaTextEditor.IsTransientCaptureRace("Идентификатор UIA-фокуса изменился во время снимка"),false,"focus change is never treated as a race");
+Eq(UiaTextEditor.IsTransientCaptureRace("Активное окно изменилось во время снимка"),false,"foreground change is never treated as a race");
+Eq(UiaTextEditor.IsTransientCaptureRace("Фокус перешёл в защищённое поле"),false,"password focus invalidates the snapshot");
 Eq(LanguagePlausibility.IsClearlyMorePlausible("rfr ns levftim","как ты думаешь",KeyboardLayout.English),true,"conversation phrase remains recognized after final soft sign");
 Eq(LanguagePlausibility.IsClearlyMorePlausible("levftim","думаешь",KeyboardLayout.English),true,"conversational inflection is learned from independent corpus");
 Eq(LanguagePlausibility.IsClearlyMorePlausible("ns pyftim","ты знаешь",KeyboardLayout.English),true,"other conversational inflections improve without a whitelist");
