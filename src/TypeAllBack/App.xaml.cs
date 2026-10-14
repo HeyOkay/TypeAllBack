@@ -63,6 +63,8 @@ public partial class App : Application
         AutoEnterOptions.Changed += SaveAutoEnter;
         GlassPreviewOptions.SetEnabled(_settings.GlassPreview);
         GlassPreviewOptions.Changed += SaveGlassPreview;
+        NewSessionAfterAcceptOptions.SetEnabled(_settings.NewSessionAfterAccept);
+        NewSessionAfterAcceptOptions.Changed += SaveNewSessionAfterAccept;
         _sound = new CorrectionSound(_settings.Sound);
         _controller = new LayoutPreviewController();
         _controller.ReplacementConfirmed += _sound.Play;
@@ -84,10 +86,18 @@ public partial class App : Application
         _settings.Save();
     }
 
+    private void SaveNewSessionAfterAccept(bool enabled)
+    {
+        if (_settings == null) return;
+        _settings.NewSessionAfterAccept = enabled;
+        _settings.Save();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         AutoEnterOptions.Changed -= SaveAutoEnter;
         GlassPreviewOptions.Changed -= SaveGlassPreview;
+        NewSessionAfterAcceptOptions.Changed -= SaveNewSessionAfterAccept;
         _tray?.Dispose();
         _controller?.Dispose();
         _sound?.Dispose();

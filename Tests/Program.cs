@@ -661,6 +661,14 @@ var fallbackProbe=new UiaRangeFont((_,_) => { fallbackReads++; return null; });
 var fallbackMeasurable=reportedFont with {FontFamilyName="LayoutPreview-Nonexistent-Font-123",SelectionStart=5,SelectionEnd=5};
 for(int attempt=0;attempt<5;attempt++) fallbackProbe.Enrich(fallbackMeasurable,null!,1);
 Eq(new TraySettings().GlassPreview,true,"glass preview is the default style for new settings");
+Eq(new TraySettings().NewSessionAfterAccept,false,"accepted text keeps its layout guard unless the user opts in");
+Eq(KeyboardConversion.TryClassifyLayout(0x04090409,out var usLayout) && usLayout==KeyboardLayout.English,true,"US English is supported");
+Eq(KeyboardConversion.TryClassifyLayout(0x04190419,out var ruLayout) && ruLayout==KeyboardLayout.Russian,true,"standard Russian is supported");
+Eq(KeyboardConversion.TryClassifyLayout(0x08090809,out var ukLayout) && ukLayout==KeyboardLayout.English,true,"UK English (QWERTY) is supported");
+Eq(KeyboardConversion.TryClassifyLayout(0x04090809,out _),true,"UK English input with the US keyboard is supported");
+Eq(KeyboardConversion.TryClassifyLayout(0xF0020409,out _),false,"Dvorak and other keyboard variants are excluded");
+Eq(KeyboardConversion.TryClassifyLayout(0xF0080419,out _),false,"Russian typewriter is excluded");
+Eq(KeyboardConversion.TryClassifyLayout(0x04220422,out _),false,"other languages are excluded");
 {
     // Synthetic strip: x-height band rows 6..14 with four 2-px stems, one ascender, one descender.
     const int gw=30, gh=20; const int back=unchecked((int)0xFF383A40), ink=unchecked((int)0xFFDBDEE1);

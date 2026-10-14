@@ -16,7 +16,9 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
     private Native.LowLevelKeyboardProc? _proc;
     private uint _threadId;
     private IntPtr _hook;
-    private IntPtr _focusHook, _foregroundHook;
+    private IntPtr _focusHook, _foregroundHook, _mouseHook;
+    private Native.LowLevelKeyboardProc? _mouseProc; // same signature as the mouse hook procedure
+    private static readonly uint OwnProcessId = (uint)Environment.ProcessId;
     private Native.WinEventProc? _focusProc;
     private Exception? _error;
     private long _sequence, _inputEpoch;
@@ -59,6 +61,13 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
                 IntPtr.Zero, _focusProc, 0, 0, 0x0002);
             if (_focusHook == IntPtr.Zero || _foregroundHook == IntPtr.Zero)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            // A click in another field of the same browser page keeps the window and its
+            // focus HWND; the accessibility focus event can arrive after the first typed key,
+            // which was then counted for the old field and lost. A button press elsewhere
+            // invalidates the cached field at once. Optional: without it focus events remain.
+            _mouseProc = MouseCallback;
+            _mouseHook = Native.SetWindowsHookEx(Native.WH_MOUSE_LL, _mouseProc, Native.GetModuleHandle(module.ModuleName), 0);
+            if (_mouseHook == IntPtr.Zero) Trace.WriteLine("Mouse hook unavailable: " + Marshal.GetLastWin32Error());
             _ready.Set();
             while (Native.GetMessage(out _, IntPtr.Zero, 0, 0) > 0) { }
         }
@@ -67,9 +76,27 @@ internal sealed class KeyboardHookPump(Action<CapturedKeyboardInput> deliver, bo
         {
             if (_focusHook != IntPtr.Zero) Native.UnhookWinEvent(_focusHook);
             if (_foregroundHook != IntPtr.Zero) Native.UnhookWinEvent(_foregroundHook);
+            if (_mouseHook != IntPtr.Zero) Native.UnhookWindowsHookEx(_mouseHook);
             if (_hook != IntPtr.Zero) Native.UnhookWindowsHookEx(_hook);
         }
     }
+    // Button presses only (moves return at once). A click on our own preview is an accept
+    // and must keep the field snapshot it is verified against.
+    private IntPtr MouseCallback(int code, IntPtr wParam, IntPtr lParam)
+    {
+        if (code >= 0 && wParam.ToInt32() is 0x0201 or 0x0204 or 0x0207 or 0x020B)
+        {
+            var info = Marshal.PtrToStructure<Native.MSLLHOOKSTRUCT>(lParam);
+            IntPtr target = Native.WindowFromPoint(info.pt);
+            if (target == IntPtr.Zero || Native.GetWindowThreadProcessId(target, out uint processId) == 0 || processId != OwnProcessId)
+            {
+                AcceptContext = null;
+                TextEditor.NotifyFocusChanged();
+            }
+        }
+        return Native.CallNextHookEx(_mouseHook, code, wParam, lParam);
+    }
+
     private IntPtr Callback(int code, IntPtr wParam, IntPtr lParam)
     {
         if (code < 0) return Native.CallNextHookEx(_hook, code, wParam, lParam);

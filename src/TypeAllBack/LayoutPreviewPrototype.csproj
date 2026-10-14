@@ -18,6 +18,10 @@
   </PropertyGroup>
 <ItemGroup>
   <Resource Include="Assets\TypeAllBack.ico" />
+  <!-- Common open web fonts for the preview (SIL OFL 1.1): see Fonts\README.md. -->
+  <Resource Include="Fonts\*.ttf" />
+  <Content Include="Fonts\README.md" Link="Fonts\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  <Content Include="Fonts\licenses\*.txt" Link="Fonts\licenses\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   <Content Include="..\..\LICENSE-NOTICE.txt" Link="LICENSE-NOTICE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   <Content Include="..\..\LICENSING.md" Link="LICENSING.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

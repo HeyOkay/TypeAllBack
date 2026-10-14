@@ -110,6 +110,7 @@ public sealed class LayoutPreviewController : IDisposable
     }
     private void ConfirmDiagnosticText()
     {
+        _unconfirmedSessionKeys.Clear();
         _debugConfirmed = _session?.Source ?? "";
         _debugState = "Текст подтверждён";
         InputLog.Confirmed(_debugConfirmed);
@@ -118,6 +119,11 @@ public sealed class LayoutPreviewController : IDisposable
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly bool _testInput = Environment.GetCommandLineArgs().Contains("--test-input");
     private readonly List<QueuedInput> _pendingInputs = [];
+    // Keys typed straight into a session that no snapshot has confirmed yet (the key that
+    // started it, and any appended before the first confirmation). A reset must preserve
+    // them together with the pending keys, or the first letter of the word was lost:
+    // only "hbdtn" of "ghbdtn" was kept and the next session started one letter late.
+    private readonly List<QueuedInput> _unconfirmedSessionKeys = [];
     private readonly List<QueuedInput> _deferredStartupInputs = [];
     private readonly DispatcherTimer _deferredStartupWatch = new() { Interval = TimeSpan.FromMilliseconds(50) };
     private KeyboardHookPump? _keyboard;
@@ -141,7 +147,14 @@ public sealed class LayoutPreviewController : IDisposable
     private long _lastQueuedKeyAt;
     private long _mismatchSince;
     // Keys captured before a usable snapshot wait this long after the last key.
-    private const int DeferredStartupWindowMs = 2000;
+    // A browser or Electron app can take seconds to expose its accessibility tree for the
+    // first time; 2 s dropped the keys typed right after switching to such a window.
+    private const int DeferredStartupWindowMs = 5000;
+    // A pause this long ends the session: text typed after it is a new thought, and an old
+    // word must not be evaluated or replaced together with it. Right and Enter still accept
+    // a hint that is on screen.
+    private const int SessionIdleMs = 10000;
+    private long _lastSessionKeyAt;
     // A snapshot captured this long after the last key is evidence, not provider lag.
     private const int EditorSettleMs = 400;
     // Upper bound when the provider publishes no newer snapshot at all.
@@ -340,6 +353,10 @@ public sealed class LayoutPreviewController : IDisposable
         if (_accepting) { Trace.WriteLine("Accept cancelled by intervening input"); Reset("Принятие отменено новым вводом"); return Next(); }
         if ((data.flags & Native.LLKHF_INJECTED) != 0 && !_testInput) { Reset("Внешний синтетический ввод"); return Next(); }
         if (vk is 0x10 or 0xA0 or 0xA1) return Next();
+        long keyAt = Environment.TickCount64;
+        if (_session != null && vk != Native.VK_RIGHT && _lastSessionKeyAt != 0 && keyAt - _lastSessionKeyAt > SessionIdleMs)
+            Reset($"Пауза в наборе дольше {SessionIdleMs / 1000} с; сессия начинается заново");
+        if (vk != Native.VK_RIGHT) _lastSessionKeyAt = keyAt;
         bool shift = input.Shift;
         // Shortcuts such as Ctrl+A, Ctrl+C and formatting commands do not invalidate
         // the input session by themselves. The editor watcher verifies the text before
@@ -371,6 +388,7 @@ public sealed class LayoutPreviewController : IDisposable
                 EndDiagnosticSession("Ctrl+A и Backspace удалили диапазон сессии");
                 _debugConfirmed = "";
                 _session = null; _editor = null; _targetLayout = IntPtr.Zero;
+                _unconfirmedSessionKeys.Clear();
                 _uiaStartupUnconfirmed = false; _visible = false;
                 if (_keyboard != null) _keyboard.AcceptContext = null;
                 Application.Current.Dispatcher.BeginInvoke(() =>
@@ -449,6 +467,11 @@ public sealed class LayoutPreviewController : IDisposable
         int selectedEnd = selectAllWasPending ? snapshot.Text.Length : snapshot.SelectionEnd;
         if (selectedStart != selectedEnd && KeyboardConversion.TryConvert(guardKey, layout, out _))
         {
+            // Keys captured before the field had a snapshot come first: in the omnibox the
+            // first letter is followed by a selected inline completion, and starting a
+            // selection replacement here dropped that letter ("hbdtn" instead of "ghbdtn").
+            if (_session == null && !selectAllWasPending && _deferredStartupInputs.Count > 0)
+                TryAttachDeferredStartup(snapshot);
             if (_session != null && _editor != null && TextEditor.SameEditor(_editor, snapshot))
             {
                 TryConfirmUiaStartup(snapshot);
@@ -465,6 +488,7 @@ public sealed class LayoutPreviewController : IDisposable
             { Reset("Начало при замене выделения отключено"); return Next(); }
             BeginDiagnosticSession("Ввод вместо выделения", selectedStart);
             _session = InputSession.FromSelectionReplacement(snapshot.Text, selectedStart, selectedEnd, guardKey, layout);
+            _unconfirmedSessionKeys.Clear();
             _editor = snapshot with { Text = "" };
             _uiaStartupUnconfirmed = false;
             _pendingInputs.Clear();
@@ -540,12 +564,17 @@ public sealed class LayoutPreviewController : IDisposable
             BeginDiagnosticSession("Первый подходящий символ", snapshot.SelectionEnd);
             _session = new InputSession(snapshot.Text, snapshot.SelectionEnd, layout); _editor = snapshot with { Text = "" };
             _uiaStartupUnconfirmed = snapshot.AutomationIdentity.Length > 0;
+            _unconfirmedSessionKeys.Clear();
+            _unconfirmedSessionKeys.Add(new QueuedInput(data.vkCode, shift, _capturedCapsLock, layout));
             Trace.WriteLine($"Session started uia={snapshot.AutomationIdentity.Length > 0} start={snapshot.SelectionEnd} documentLength={snapshot.Text.Length}");
             _targetLayout = FindLayout(_session.TargetLayout);
             if (_targetLayout == IntPtr.Zero) { Reset("Целевая раскладка не установлена"); return Next(); }
             _watch.Start();
         }
         if (_session.Source.Length >= 4096) { Reset("Достигнут текущий предел 4096 символов"); return Next(); }
+        // The starting key was recorded above; later direct keys only while still unconfirmed.
+        if (_unconfirmedSessionKeys.Count > 0 && _session.Source.Length > 0)
+            _unconfirmedSessionKeys.Add(new QueuedInput(data.vkCode, shift, _capturedCapsLock, layout));
         _session.Append(key, layout, snapshot.Text); ScheduleUpdate(); return Next();
         IntPtr Next() => IntPtr.Zero; // Native delivery already happened on the hook thread.
     }
@@ -600,14 +629,18 @@ public sealed class LayoutPreviewController : IDisposable
             bool firstFailure = !_editorAvailability.Waiting;
             if (_editorAvailability.CanWait(Environment.TickCount64))
             {
-                if (firstFailure) Diagnostic("Ожидание редактора", "Сессия сохранена; причина снимка: " + TextEditor.LastCaptureFailure);
+                if (firstFailure) Diagnostic("Ожидание редактора", "Сессия сохранена; причина снимка: " + CaptureFailure());
+                TextEditor.RequestProbe(2000);
                 _debugState = "Сессия сохранена; ожидается доступный снимок редактора";
                 _visible = false;
                 if (_keyboard != null) _keyboard.AcceptContext = null;
                 _preview.HidePreview();
                 return;
             }
-            Reset("Редактор непрерывно недоступен не менее 1200 мс: " + TextEditor.LastCaptureFailure); return;
+            // Keys typed meanwhile usually went to a newly focused field of the same window
+            // (a click from the omnibox into the page): keep them for that field's first
+            // snapshot instead of dropping the start of the next word.
+            ResetPreservingInput("Редактор непрерывно недоступен не менее 1200 мс: " + CaptureFailure()); return;
         }
         bool recovered = _editorAvailability.Waiting;
         if (recovered) Diagnostic("Редактор доступен", $"Снимок восстановлен после {_editorAvailability.Duration(Environment.TickCount64)} мс; требуется подтверждение всей сессии");
@@ -842,12 +875,14 @@ public sealed class LayoutPreviewController : IDisposable
             ClearDeferredStartup();
         if (_deferredStartupInputs.Count == 0)
         {
-            Diagnostic("Ожидание поля", "Сохраняются физические клавиши до первого доступного снимка");
+            Diagnostic("Ожидание поля", "Сохраняются физические клавиши до первого доступного снимка; захват: " + CaptureFailure());
+            _deferredWaitLoggedAt = now;
             _deferredStartupForeground = foreground;
             _deferredStartupThread = thread;
         }
         if (_deferredStartupInputs.Count >= 64) { ClearDeferredStartup(); return false; }
         _deferredStartupInputs.Add(new QueuedInput(data.vkCode, shift, capsLock, layout));
+        TextEditor.RequestProbe(DeferredStartupWindowMs);
         _deferredDiagnosticSequences.Add(_processingDiagnosticInput?.Sequence ?? _processedSequence);
         _deferredStartupUntil = now + DeferredStartupWindowMs;
         _deferredLastKeyAt = now;
@@ -855,10 +890,38 @@ public sealed class LayoutPreviewController : IDisposable
         return true;
     }
 
+    private static string CaptureFailure() => (TextEditor.LastCaptureFailure is { Length: > 0 } reason ? reason :
+        "последний захват был успешным, новый ещё не получен") + "; кэш: " + TextEditor.DescribeCache();
+
+    // What the field showed instead of the captured keys: the cause of a rejected start.
+    private string DeferredMismatch(EditorSnapshot snapshot)
+    {
+        var expected = new System.Text.StringBuilder();
+        foreach (var input in _deferredStartupInputs)
+            expected.Append(KeyboardConversion.TryConvert(new PhysicalKey(input.VirtualKey, input.Shift, input.CapsLock), input.Layout, out var c) ? c : '?');
+        int caret = Math.Clamp(snapshot.SelectionStart, 0, snapshot.Text.Length);
+        string before = snapshot.Text[Math.Max(0, caret - 16)..caret].Replace("\n", "⏎").Replace("\r", "");
+        string selected = snapshot.Text[caret..Math.Clamp(snapshot.SelectionEnd, caret, snapshot.Text.Length)];
+        return $"ожидалось перед кареткой «{expected}»; в поле «{before}»" +
+            (selected.Length > 0 ? $", выделено «{(selected.Length > 16 ? selected[..16] + "…" : selected)}»" : "") +
+            $"; каретка {snapshot.SelectionStart}..{snapshot.SelectionEnd} из {snapshot.Text.Length}";
+    }
+
+    private long _deferredWaitLoggedAt;
     private bool TryAttachDeferredStartup()
     {
+        // While keys wait for a field, say once a second why there is no usable snapshot.
+        if (_deferredStartupInputs.Count > 0 && Environment.TickCount64 - _deferredWaitLoggedAt >= 1000 && !TextEditor.TryRead(out _))
+        {
+            _deferredWaitLoggedAt = Environment.TickCount64;
+            Diagnostic("Ожидание поля", $"отложено символов: {_deferredStartupInputs.Count}; захват: {CaptureFailure()}");
+        }
         if (Environment.TickCount64 > _deferredStartupUntil)
-        { Diagnostic("Начало отклонено", $"Первый снимок не подтвердил захваченный ввод за {DeferredStartupWindowMs} мс"); ClearDeferredStartup(); return false; }
+        {
+            Diagnostic("Начало отклонено", $"Первый снимок не подтвердил захваченный ввод за {DeferredStartupWindowMs} мс" +
+                (TextEditor.TryRead(out var late) ? "; " + DeferredMismatch(late) : "; снимка поля нет: " + TextEditor.LastCaptureFailure));
+            ClearDeferredStartup(); return false;
+        }
         return TextEditor.TryRead(out var snapshot) && TryAttachDeferredStartup(snapshot);
     }
 
@@ -868,9 +931,18 @@ public sealed class LayoutPreviewController : IDisposable
         if (!CanStart(SessionStartRuleId.DeferredStartup)) { ClearDeferredStartup(); return false; }
         if (Environment.TickCount64 > _deferredStartupUntil)
         { ClearDeferredStartup(); return false; }
-        if (snapshot.Foreground != _deferredStartupForeground || snapshot.Thread != _deferredStartupThread ||
-            snapshot.SelectionStart != snapshot.SelectionEnd)
+        if (snapshot.Foreground != _deferredStartupForeground || snapshot.Thread != _deferredStartupThread)
             return false;
+        // Inline autocomplete (the omnibox completes "g" to "g|oogle.com" with the tail
+        // selected): the captured keys end where the selected completion begins.
+        string text = snapshot.Text;
+        int caret = snapshot.SelectionEnd;
+        if (snapshot.SelectionStart != snapshot.SelectionEnd)
+        {
+            if (snapshot.SelectionEnd != snapshot.Text.Length) return false;
+            caret = snapshot.SelectionStart;
+            text = snapshot.Text[..caret];
+        }
 
         var source = new System.Text.StringBuilder(_deferredStartupInputs.Count);
         foreach (var input in _deferredStartupInputs)
@@ -880,16 +952,16 @@ public sealed class LayoutPreviewController : IDisposable
             source.Append(character);
         }
         if (source.Length == 0) return false;
-        int end = snapshot.SelectionEnd;
-        if (end < source.Length || !snapshot.Text.AsSpan(end - source.Length, source.Length)
+        int end = caret;
+        if (end < source.Length || !text.AsSpan(end - source.Length, source.Length)
                 .SequenceEqual(source.ToString().AsSpan()))
             return false;
         int start = end - source.Length;
-        string baselineText = snapshot.Text.Remove(start, source.Length);
+        string baselineText = text.Remove(start, source.Length);
         var session = new InputSession(baselineText, start, _deferredStartupInputs[0].Layout);
 
         session.ReplayPending(_deferredStartupInputs);
-        if (!session.Reconcile(snapshot.Text, snapshot.SelectionStart, snapshot.SelectionEnd))
+        if (!session.Reconcile(text, caret, caret))
             return false;
 
         BeginDiagnosticSession("Захваченный ввод подтверждён первым снимком", start);
@@ -923,7 +995,7 @@ public sealed class LayoutPreviewController : IDisposable
         // A settled snapshot without them proves they are not before the caret.
         bool settled = snapshot.CapturedAt - _deferredLastKeyAt >= EditorSettleMs;
         if (!settled && TryQueueDeferredStartup(data, shift)) return true;
-        if (settled) Diagnostic("Начало отклонено", "Сохранённые клавиши не найдены перед кареткой в обновлённом снимке");
+        if (settled) Diagnostic("Начало отклонено", "Сохранённые клавиши не найдены перед кареткой в обновлённом снимке; " + DeferredMismatch(snapshot));
         ClearDeferredStartup();
         return false;
     }
@@ -947,11 +1019,11 @@ public sealed class LayoutPreviewController : IDisposable
         List<QueuedInput>? keys = null;
         IntPtr foreground = _editor?.Foreground ?? IntPtr.Zero;
         uint thread = _editor?.Thread ?? 0;
-        if (foreground != IntPtr.Zero && thread != 0 && _pendingInputs.Count > 0 &&
+        if (foreground != IntPtr.Zero && thread != 0 && _pendingInputs.Count + _unconfirmedSessionKeys.Count > 0 &&
             _startRules.Allows(SessionStartRuleId.DeferredStartup))
         {
             keys = new List<QueuedInput>();
-            foreach (var input in _pendingInputs)
+            foreach (var input in _unconfirmedSessionKeys.Concat(_pendingInputs))
             {
                 if (input.VirtualKey != 0x08) { keys.Add(input); continue; }
                 // Deleting text before the captured keys cannot be replayed safely.
@@ -969,6 +1041,7 @@ public sealed class LayoutPreviewController : IDisposable
         _deferredLastKeyAt = lastKeyAt;
         _deferredStartupUntil = Environment.TickCount64 + DeferredStartupWindowMs;
         _deferredStartupWatch.Start();
+        TextEditor.RequestProbe(DeferredStartupWindowMs);
         Diagnostic("Ввод сохранён", $"Неподтверждённых клавиш: {keys.Count}; ожидается подтверждение нового начала сессии");
     }
 
@@ -1030,7 +1103,9 @@ public sealed class LayoutPreviewController : IDisposable
                 if (replaced) ReplacementConfirmed?.Invoke();
                 Diagnostic("Замена", replaced ? "Полный результат подтверждён редактором" : "Результат замены не подтверждён; подробности в событиях backend");
                 Trace.WriteLine("Accept replace result: " + replaced);
-                if (replaced && TextEditor.TryRead(out var accepted) &&
+                if (replaced && NewSessionAfterAcceptOptions.Enabled)
+                    Diagnostic("Принятие", "Защита принятой раскладки не включена: следующий символ начнёт новую сессию");
+                else if (replaced && TextEditor.TryRead(out var accepted) &&
                     accepted.SelectionStart == accepted.SelectionEnd &&
                     accepted.SelectionStart == session.Start + session.Replacement.Length)
                 {
@@ -1068,16 +1143,19 @@ public sealed class LayoutPreviewController : IDisposable
             else Reset(replacementConfirmed ? "Текущий участок принят" : "Принятие не подтверждено; сессия завершена");
         }
     }
-    internal static bool TryLayout(IntPtr hkl, out KeyboardLayout layout)
-    {
-        ushort language = unchecked((ushort)hkl.ToInt64()); layout = language == 0x0419 ? KeyboardLayout.Russian : KeyboardLayout.English;
-        return (ulong)hkl.ToInt64() == (language == 0x0419 ? 0x04190419UL : 0x04090409UL);
-    }
+    // Russian: the standard ЙЦУКЕН keyboard (0419). English: any English input language on
+    // the default keyboard of an English locale (US, UK, Canada, Australia, Ireland... all
+    // QWERTY). Keyboard variants (high word F0xx: Dvorak, US-International, Russian
+    // typewriter) are excluded: their keys do not map to the same characters.
+    internal static bool TryLayout(IntPtr hkl, out KeyboardLayout layout) =>
+        KeyboardConversion.TryClassifyLayout(unchecked((ulong)hkl.ToInt64()), out layout);
     private static IntPtr FindLayout(KeyboardLayout desired)
     {
         int count = Native.GetKeyboardLayoutList(0, null); if (count <= 0) return IntPtr.Zero;
         var list = new IntPtr[count]; Native.GetKeyboardLayoutList(count, list);
-        return list.FirstOrDefault(hkl => (ulong)hkl.ToInt64() == (desired == KeyboardLayout.Russian ? 0x04190419UL : 0x04090409UL));
+        ulong standard = desired == KeyboardLayout.Russian ? 0x04190419UL : 0x04090409UL;
+        var exact = list.FirstOrDefault(hkl => unchecked((ulong)hkl.ToInt64()) == standard);
+        return exact != IntPtr.Zero ? exact : list.FirstOrDefault(hkl => TryLayout(hkl, out var found) && found == desired);
     }
     private void Reset(string reason = "Сброс состояния", [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
@@ -1089,6 +1167,7 @@ public sealed class LayoutPreviewController : IDisposable
         _mismatchSince = 0;
         if (_keyboard != null) _keyboard.AcceptContext = null;
         _uiaStartupUnconfirmed = false;
+        _unconfirmedSessionKeys.Clear();
         _selectAllEditor = null;
         _acceptedBackspacePending = false;
         Trace.WriteLine($"Session reset: {caller} start={_session?.Start} chars={_session?.Source.Length} queued={_pendingInputs.Count} startup={_deferredStartupInputs.Count}"); ClearDeferredStartup(); _lastPreview = ""; _pendingUntil = 0; _pendingInputs.Clear(); _generation++; _session = null; _editor = null; _targetLayout = IntPtr.Zero; _visible = false; _hasAppeared = false;

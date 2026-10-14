@@ -10,6 +10,7 @@ internal sealed class TraySettings
     public bool AutoEnter { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public bool GlassPreview { get; set; } = true;
+    public bool NewSessionAfterAccept { get; set; }
     public string UpdateFeedUrl { get; set; } = "";
     internal static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TypeAllBack", "settings.json");
     internal static TraySettings Load()

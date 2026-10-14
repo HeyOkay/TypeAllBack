@@ -54,6 +54,18 @@ internal sealed class UiaTextEditor : IDisposable
         Interlocked.Exchange(ref _lastInputAt, Environment.TickCount64);
         _wake.Set();
     }
+    // The controller holds typed keys for a field it has no snapshot of yet. A web page is
+    // normally probed only within 800 ms of a key (no browser accessibility work while the
+    // user only reads), but the first capture of a page can block for seconds; afterwards
+    // that window had passed and the page was never read, so the waiting keys expired.
+    private long _probeUntil;
+    internal void RequestProbe(int durationMs)
+    {
+        long until = Environment.TickCount64 + durationMs;
+        if (until > Interlocked.Read(ref _probeUntil)) Interlocked.Exchange(ref _probeUntil, until);
+        _wake.Set();
+    }
+
     internal void NotifyFocusChanged()
     {
         Interlocked.Increment(ref _focusGeneration);
@@ -138,6 +150,24 @@ internal sealed class UiaTextEditor : IDisposable
             (gui.flags & Native.GUI_INMOVESIZE) != 0) return false;
         snapshot = snapshot with { Layout = Native.GetKeyboardLayout(snapshot.Thread) };
         return true;
+    }
+
+    // Why TryReadCached refuses right now, for the session log (diagnostics only).
+    public string DescribeCache()
+    {
+        var snapshot = Volatile.Read(ref _snapshot);
+        if (_paused) return "захват приостановлен";
+        if (snapshot == null) return "снимка в кэше нет";
+        long age = Environment.TickCount64 - snapshot.CapturedAt;
+        if (age > EditorPolling.MaximumSnapshotAgeMs) return $"снимок устарел ({age} мс)";
+        IntPtr foreground = Native.GetForegroundWindow();
+        if (foreground != snapshot.Foreground) return $"снимок другого окна ({snapshot.Foreground.ToInt64():X}, активно {foreground.ToInt64():X})";
+        var gui = new Native.GUITHREADINFO { cbSize = Marshal.SizeOf<Native.GUITHREADINFO>() };
+        if (!Native.GetGUIThreadInfo(Native.GetWindowThreadProcessId(snapshot.Foreground, IntPtr.Zero), ref gui)) return "нет данных о фокусе окна";
+        IntPtr focus = gui.hwndFocus == IntPtr.Zero ? snapshot.Foreground : gui.hwndFocus;
+        if (focus != snapshot.Editor) return $"фокус в другом HWND (снимок {snapshot.Editor.ToInt64():X}, фокус {focus.ToInt64():X})";
+        if ((gui.flags & Native.GUI_INMOVESIZE) != 0) return "окно перемещается";
+        return $"снимок доступен ({age} мс)";
     }
 
     public bool TryEnrichNativeSnapshot(EditorSnapshot current, out EditorSnapshot enriched)
@@ -415,7 +445,8 @@ internal sealed class UiaTextEditor : IDisposable
             }
             if (presentation && !BrowserProbeAllowed(nativeClass, Environment.TickCount64,
                 Interlocked.Read(ref _lastInputAt), foreground == Interlocked.CompareExchange(ref _inputForeground, IntPtr.Zero, IntPtr.Zero),
-                Volatile.Read(ref _snapshot) is { } cached && cached.Foreground == foreground && cached.Editor == focusHandle))
+                Volatile.Read(ref _snapshot) is { } cached && cached.Foreground == foreground && cached.Editor == focusHandle ||
+                Environment.TickCount64 < Interlocked.Read(ref _probeUntil)))
             {
                 stage = "Chromium: ожидание клавиатурного ввода; веб-страница не опрашивается";
                 return false;

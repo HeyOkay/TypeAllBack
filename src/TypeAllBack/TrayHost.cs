@@ -22,6 +22,7 @@ internal sealed class TrayHost : IDisposable
         _menu.AddToggle("Утилита включена", () => settings.Enabled, value => { enabled(value); settings.Enabled = value; settings.Save(); });
         _menu.AddToggle("Исправлять перед Enter", () => AutoEnterOptions.Enabled, AutoEnterOptions.SetEnabled);
         _menu.AddToggle("Звук исправления", () => sound.Enabled, value => { sound.SetEnabled(value); settings.Sound = value; settings.Save(); });
+        _menu.AddToggle("Новая сессия после принятия", () => NewSessionAfterAcceptOptions.Enabled, NewSessionAfterAcceptOptions.SetEnabled);
         _menu.AddToggle("Стеклянная подсказка", () => GlassPreviewOptions.Enabled, GlassPreviewOptions.SetEnabled);
         _menu.AddCommand("Отладка…", debug);
         _menu.AddCommand("Тестовые поля…", OpenFieldTester);

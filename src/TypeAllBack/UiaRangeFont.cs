@@ -204,7 +204,7 @@ internal sealed class UiaRangeFont
     internal static double Width(string text, string family, int weight, bool italic, double size)
     {
         var choice = PreviewFontResolver.Resolve(family, weight, italic, text);
-        var typeface = new Typeface(new FontFamily(choice.Used),
+        var typeface = new Typeface(PreviewFontResolver.Family(choice.Used),
             italic ? FontStyles.Italic : FontStyles.Normal,
             FontWeight.FromOpenTypeWeight(weight is >= 100 and <= 900 ? weight : 400), FontStretches.Normal);
         return new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, size, Brushes.Black, 1).WidthIncludingTrailingWhitespace;

@@ -27,15 +27,61 @@ internal static class PreviewFontResolver
     });
     private static readonly ConcurrentDictionary<(string, int, bool), Face> Faces = new();
 
+    // Common open web fonts shipped with the app (Fonts/, OFL 1.1, see Fonts/README.md),
+    // so a field in Roboto, Open Sans, Inter... gets its own font instead of Segoe UI.
+    // An installed font of the same name always wins. Fonts with a Reserved Font Name
+    // that had to be instanced from a variable font carry a neutral internal name.
+    private static readonly Dictionary<string, string> BundledAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["IBM Plex Sans"] = "TAB Sans A", ["Raleway"] = "TAB Sans B",
+        ["Source Sans 3"] = "TAB Sans C", ["Source Sans Pro"] = "TAB Sans C",
+        ["Source Code Pro"] = "TAB Mono C",
+        // CSS names sites give the same fonts.
+        ["Inter var"] = "Inter", ["InterVariable"] = "Inter", ["Inter Variable"] = "Inter",
+        ["Open Sans Variable"] = "Open Sans", ["Roboto Variable"] = "Roboto",
+    };
+    private static readonly Lazy<Dictionary<string, FontFamily>> Bundled = new(() =>
+    {
+        var map = new Dictionary<string, FontFamily>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var baseUri = new Uri("pack://application:,,,/TypeAllBack;component/");
+            foreach (var family in Fonts.GetFontFamilies(baseUri, "./Fonts/"))
+                foreach (string name in family.FamilyNames.Values)
+                    map.TryAdd(name, family);
+        }
+        // Without the app's resources (unit tests, a stripped build) Segoe UI stays the fallback.
+        catch (Exception e) when (e is UriFormatException or System.IO.IOException or NotSupportedException or InvalidOperationException or ArgumentException) { }
+        return map;
+    });
+
+    // The family the preview renders a resolved name with: an installed one, else a shipped one.
+    public static FontFamily Family(string used)
+    {
+        if (!Families.Value.ContainsKey(used) && Bundled.Value.TryGetValue(used, out var bundled)) return bundled;
+        return new FontFamily(used);
+    }
+
+    internal static bool IsBundled(string family) =>
+        Bundled.Value.ContainsKey(BundledAliases.TryGetValue(family.Trim(), out string? alias) ? alias : family.Trim());
+
     private static Face Find(string name, int weight, bool italic)
     {
         if (Faces.Count > 256) Faces.Clear();
         return Faces.GetOrAdd((name, weight, italic), key =>
         {
-            if (!Families.Value.TryGetValue(key.Item1, out string? installed)) return new("", null, false);
+            string? installed = null;
+            FontFamily? family = null;
+            if (Families.Value.TryGetValue(key.Item1, out string? system)) { installed = system; }
+            else
+            {
+                string name = BundledAliases.TryGetValue(key.Item1, out string? alias) ? alias : key.Item1;
+                if (Bundled.Value.TryGetValue(name, out var shipped)) { installed = name; family = shipped; }
+            }
+            if (installed == null) return new("", null, false);
             try
             {
-                var family = new FontFamily(installed);
+                family ??= new FontFamily(installed);
                 var typeface = new Typeface(family, key.Item3 ? FontStyles.Italic : FontStyles.Normal,
                     FontWeight.FromOpenTypeWeight(key.Item2 is >= 100 and <= 900 ? key.Item2 : 400), FontStretches.Normal);
                 if (typeface.TryGetGlyphTypeface(out var glyph)) return new(installed, glyph, false);

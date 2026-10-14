@@ -141,7 +141,7 @@ public partial class PreviewWindow : Window
             PreviewText.FontSize, Brushes.Black, null, TextFormattingMode.Display, scale).Baseline;
 
     private static double XHeightEm(string family, FontWeight weight, bool italic) =>
-        new Typeface(new FontFamily(family), italic ? FontStyles.Italic : FontStyles.Normal, weight, FontStretches.Normal)
+        new Typeface(PreviewFontResolver.Family(family), italic ? FontStyles.Italic : FontStyles.Normal, weight, FontStretches.Normal)
             .TryGetGlyphTypeface(out var glyphs) ? glyphs.XHeight : 0;
 
     private static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255;
@@ -274,7 +274,7 @@ public partial class PreviewWindow : Window
         _layoutScale = PreviewMetrics.OverlayScaleRatio(targetDpi, overlayScale);
 
         var fontChoice = PreviewFontResolver.Resolve(fontFamilyName, fontWeight, fontItalic, text);
-        PreviewText.FontFamily = new FontFamily(fontChoice.Used);
+        PreviewText.FontFamily = PreviewFontResolver.Family(fontChoice.Used);
         if (animateFirstAppearance || fontSource.Length > 0)
         {
             int weight = fontWeight is >= 100 and <= 900 ? fontWeight : 400;
@@ -331,13 +331,28 @@ public partial class PreviewWindow : Window
         }
         // Measure the actual Display-mode TextBlock. FormattedText used different
         // glyph metrics and could leave an apparent extra blank at the right edge.
+        // Measured without the previous render's text offset (its margins are set below).
+        PreviewText.Margin = new Thickness(0);
         PreviewText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        double textHeight = PreviewText.DesiredSize.Height;
         // Whole device pixels as in the browser, so the outer edges fall on pixel boundaries
         // (full edge pixel plus the fractional remainder inside, as in the reference).
         double targetWidth = Math.Ceiling((PreviewText.DesiredSize.Width + PreviewBorder.Padding.Left +
             PreviewBorder.Padding.Right + PreviewBorder.BorderThickness.Left + PreviewBorder.BorderThickness.Right) * overlayScale) / overlayScale;
         double targetHeight = Math.Round((PreviewText.DesiredSize.Height + PreviewBorder.Padding.Top +
             PreviewBorder.Padding.Bottom + PreviewBorder.BorderThickness.Top + PreviewBorder.BorderThickness.Bottom) * overlayScale) / overlayScale;
+        // A substituted (web) font: Segoe UI sized to the field's x-height has a much taller
+        // line box than the web font's tight line, so the pill outgrew the field (VK: 31 px
+        // pill around a 21 px caret, while the omnibox, Segoe UI itself, gets 28 around 24).
+        // The pill follows the field's line instead: the caret plus 2 DIP above and below.
+        // The text keeps its size and sits on the measured baseline; capitals, the breve
+        // of «й» and descenders still fit inside.
+        if (baselineRatio > 0 && fontChoice.Substituted)
+        {
+            int marginPx = Math.Max(1, (int)Math.Round(2 * pixelScale));
+            double lineHeight = (caretPx.Bottom - caretPx.Top + 2 * marginPx) / overlayScale;
+            if (targetHeight > lineHeight) targetHeight = lineHeight;
+        }
         double oldWidth = PreviewBorder.ActualWidth > 0 ? PreviewBorder.ActualWidth : targetWidth;
 
         PreviewBorder.Width = targetWidth;
@@ -377,17 +392,23 @@ public partial class PreviewWindow : Window
             // measurement exists: omnibox, ChatGPT). Segoe UI's line box has much more room
             // above the x-height than a web font's, so moving the whole pill to the baseline
             // left it riding high (Discord, Claude, Chrome Web Store). The text moves inside
-            // the pill instead, by at most a quarter of its height.
+            // the pill instead, by at most a third of its height.
             int textBaselinePx = (int)Math.Round((PreviewBorder.BorderThickness.Top + PreviewBorder.Padding.Top +
                 TextBaseline(fontItalic, overlayScale)) * overlayScale);
             int baselinePx = (int)Math.Round(caretPx.Top + baselineRatio * caretHeightPx);
-            int limit = previewHeightPx / 4;
+            int limit = previewHeightPx / 3;
             textShiftPx = Math.Clamp(baselinePx - visibleTopPx - textBaselinePx, -limit, limit);
             visibleTopPx = baselinePx - textBaselinePx - textShiftPx;
         }
-        // Equal and opposite margins move the text without changing the pill's size.
+        // Equal and opposite margins move the text without changing the pill's size. When the
+        // pill is shorter than Segoe UI's line box, the bottom margin also gives the TextBlock
+        // its full height: arranged smaller, WPF clipped it at its own bottom and cut the
+        // descender of «р» at the baseline. Only the pill's rounded bounds clip now.
         double textShiftDip = textShiftPx / overlayScale;
-        if (PreviewText.Margin.Top != textShiftDip) PreviewText.Margin = new Thickness(0, textShiftDip, 0, -textShiftDip);
+        double inner = targetHeight - PreviewBorder.Padding.Top - PreviewBorder.Padding.Bottom -
+            PreviewBorder.BorderThickness.Top - PreviewBorder.BorderThickness.Bottom;
+        double overflow = Math.Max(0, textHeight - inner);
+        PreviewText.Margin = new Thickness(0, textShiftDip, 0, -textShiftDip - overflow);
         int windowLeftPx = visibleLeftPx - reservePx;
         int windowTopPx = visibleTopPx - verticalReservePx;
 

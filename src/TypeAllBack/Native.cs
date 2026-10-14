@@ -6,6 +6,7 @@ namespace LayoutPreviewPrototype;
 internal static class Native
 {
     public const int WH_KEYBOARD_LL = 13;
+    public const int WH_MOUSE_LL = 14;
     internal const uint EVENT_SYSTEM_FOREGROUND = 0x0003, EVENT_OBJECT_FOCUS = 0x8005;
     internal delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int objectId, int childId, uint threadId, uint time);
     [DllImport("user32.dll", SetLastError = true)]
@@ -100,6 +101,17 @@ internal static class Native
         public int X;
         public int Y;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MSLLHOOKSTRUCT
+    {
+        public POINT pt;
+        public uint mouseData, flags, time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr WindowFromPoint(POINT point);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT

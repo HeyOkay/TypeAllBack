@@ -5,12 +5,14 @@ internal static class TextEditor
 {
     private static readonly UiaTextEditor Automation = new();
     public static string LastCaptureFailure => Automation.LastCaptureFailure;
+    public static string DescribeCache() => Automation.DescribeCache();
     public static void Start() => Automation.Start();
     internal static void SetPaused(bool paused) => Automation.SetPaused(paused);
     public static void Stop() => Automation.Dispose();
     public static event Action? SnapshotChanged { add => Automation.SnapshotChanged += value; remove => Automation.SnapshotChanged -= value; }
     public static void NotifyInput() => Automation.NotifyInput();
     internal static void NotifyFocusChanged() => Automation.NotifyFocusChanged();
+    internal static void RequestProbe(int durationMs) => Automation.RequestProbe(durationMs);
     // Only cached snapshots and cheap focus checks; no native text reads or COM.
     public static bool TryReadForHook(out EditorSnapshot snapshot) => Automation.TryReadCached(out snapshot);
 

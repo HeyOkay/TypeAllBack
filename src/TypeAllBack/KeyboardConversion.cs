@@ -3,6 +3,18 @@ internal enum KeyboardLayout { English, Russian }
 internal readonly record struct PhysicalKey(uint VirtualKey, bool Shift, bool CapsLock);
 internal static class KeyboardConversion
 {
+    // Russian: the standard ЙЦУКЕН keyboard (0419). English: any English input language on
+    // the default keyboard of an English locale (US, UK, Canada, Australia, Ireland... all
+    // QWERTY). Keyboard variants (high word F0xx: Dvorak, US-International, Russian
+    // typewriter) are excluded: their keys do not map to the same characters.
+    public static bool TryClassifyLayout(ulong hkl, out KeyboardLayout layout)
+    {
+        ushort language = (ushort)hkl, keyboard = (ushort)(hkl >> 16);
+        layout = language == 0x0419 ? KeyboardLayout.Russian : KeyboardLayout.English;
+        if (language == 0x0419) return keyboard == 0x0419;
+        return (language & 0x3FF) == 0x09 && (keyboard & 0x3FF) == 0x09 && keyboard < 0xF000;
+    }
+
     private const string Letters = "QWERTYUIOPASDFGHJKLZXCVBNM";
     private const string Russian = "йцукенгшщзфывапролдячсмить";
     public static bool TryConvert(PhysicalKey key, KeyboardLayout layout, out char value)

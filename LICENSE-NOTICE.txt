@@ -6,4 +6,5 @@ written permission from its copyright holder. Notification alone does not
 constitute permission. No commercial license is granted by this notice.
 
 Separately licensed model data and third-party materials retain their own terms;
-see LICENSING.md and Models/README.md.
+see LICENSING.md, Models/README.md and Fonts/README.md
+(fonts: SIL Open Font License 1.1).
